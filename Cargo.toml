@@ -2,13 +2,17 @@
 name = "lightning-sentinel"
 version = "0.1.0"
 edition = "2021"
+authors = ["tee8z <tee8z@protonmail.com>"]
+liscense = "LISCENSE"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "A tool to be notified if lightning node went done via REST requests over tor & a telegram message"
 
 [dependencies]
 anyhow = "1.0"
 libtor = "46.6.1+0.4.6.6"
 log = "0.4.14"
-config = "0.9"
+config = "0.11.0"
 reqwest = { version = "0.11.7", features = ["socks"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.14.0", features = ["full", "time", "sync"] }
+futures = "0.3.18"
+lazy_static = "1.4"
