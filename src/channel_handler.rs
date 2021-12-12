@@ -16,7 +16,7 @@ impl fmt::Display for LnInfo {
 }
 
 pub struct TelInfo {
-    pub user_Id:String,
+    pub user_id:String,
     pub command:String,
     pub is_active:bool,
     pub message:String,
@@ -24,7 +24,7 @@ pub struct TelInfo {
 
 impl fmt::Display for TelInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        return write!(f, "User_Id: {}\n\rIsActive: {}\n\rCommand: {},\n\rMessage: {} ", self.user_Id, self.is_active, self.command, self.message);
+        return write!(f, "User_Id: {}\n\rIsActive: {}\n\rCommand: {},\n\rMessage: {} ", self.user_id, self.is_active, self.command, self.message);
     }
 }
 //mpsc -> A multi-producer, single-consumer queue for sending values between asynchronous tasks.

@@ -25,7 +25,7 @@ fn build_headers() -> HeaderMap{
 //TODO: implement long polling
 pub async fn poll_messages<'a>(client: ClientWrapper, settings: &configuration::Settings, send_tel:Sender<LnInfo>) -> Result<(), reqwest::Error>{
     let start = Instant::now() + Duration::from_secs(20);
-    let mut interval = interval_at(start, Duration::from_secs(30));
+    let mut interval = interval_at(start, Duration::from_secs(60));
     loop {
         interval.tick().await;
         let sender = send_tel.clone();
@@ -55,11 +55,11 @@ async fn get_message<'a>(client: &ClientWrapper, settings: &configuration::Setti
         is_active:true,
         message:text,
     };
-
-    if let Err(e) = send_tel.send(tel_info).await {
-        eprintln!("{0}", e);
+    println!("{}", tel_info);
+    if let Err(_) = send_tel.send(tel_info).await {
+        println!("receiver dropped");
     }
-
+    println!("After Send");
     Ok(())
 }
 
