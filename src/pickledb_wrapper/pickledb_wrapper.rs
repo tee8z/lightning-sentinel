@@ -44,12 +44,13 @@ impl fmt::Display for Row {
 
 impl Default for Pickle {
     fn default() -> Pickle {
+        let the_path = build_path_to_pickle();
         return Pickle {
             db: Arc::new(Mutex::new(PickleDb::new(
-                    "",
-                    PickleDbDumpPolicy::AutoDump,
-                    SerializationMethod::Cbor,
-                )))
+                the_path,
+                PickleDbDumpPolicy::AutoDump,
+                SerializationMethod::Cbor,
+            )))
         }
     }
 }
@@ -58,18 +59,9 @@ impl Default for Pickle {
 impl Pickle {
     pub fn new() -> Self {
         let mut pickle = Pickle::default();
-
-        let root = config_dir().unwrap();
-        let the_way = root.to_str().unwrap();
-        let true_way = the_way.to_owned();
-        let the_path = true_way + "/.pickleDb";
+        let the_path = build_path_to_pickle();
         if !Path::new(&the_path[0..the_path.len()]).is_file() {
-            let db_mutex = Mutex::new(PickleDb::new(
-                the_path,
-                PickleDbDumpPolicy::AutoDump,
-                SerializationMethod::Cbor,
-            ));
-            pickle.db = Arc::new(db_mutex);
+            return pickle;
         } else {
             let db_mutex = Mutex::new(PickleDb::load(
                 the_path,
@@ -144,4 +136,12 @@ impl Pickle {
 
         return values_vec;
     }
+}
+
+fn build_path_to_pickle()-> String{
+    let root = config_dir().unwrap();
+    let the_way = root.to_str().unwrap();
+    let true_way = the_way.to_owned();
+    let the_path = true_way + "/.pickleDb";
+    return the_path;
 }

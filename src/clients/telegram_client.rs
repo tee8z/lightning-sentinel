@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use crate::channels::{ChannelMessage, ChannelType};
 use crate::config_wrapper;
 use tokio::sync::mpsc::{Sender};
@@ -7,6 +6,7 @@ use reqwest::{
     StatusCode,
     header::{HeaderMap, HeaderValue}
 };
+use serde::{Deserialize, Serialize};
 use super::client_wrapper::{ClientWrapper, build_url};
 use anyhow::Result;
 use crate::objects::{SendMessage, Update};
@@ -36,23 +36,34 @@ pub async fn poll_messages<'a>(client: ClientWrapper, settings: &Settings, send_
         get_message(&client, settings, sender).await?;
     }
 }
+#[derive(Serialize, Deserialize, Debug)]
+struct Response {
+    pub ok: bool,
+    pub result: Vec<Update>
+}
+
+//TODO: pipe message to different locations depending on if it's:
+    // - registration (ln_url, macraroon),
+    // - on_demand (call registered ln node)
+    // - ignore (any other type of message send options for commands back to user)
 
 async fn get_message<'a>(client: &ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
     let base_url = build_full_base(settings);
 
+    //TODO add offset logic to get only newest updates
     let res = client.client
-        .get(build_url(base_url,"/getUpdates"))
+        .get(build_url(base_url,"/getUpdates?=allowed_updates=[\"message\",\"callback_query\"]"))
         .headers(build_headers())
         .send()
         .await?;
 
     println!("Status: {}", res.status());
 
-    let last_messages = res.json::<Vec<Update>>().await.unwrap();
+    let last_messages = res.json::<Response>().await.unwrap();
     println!("Response: {:#?}", last_messages);
     //TODO: pull from key/value file userId -> node_url &macaroon mapping made at "registration";
     
-   for update in last_messages {
+   for update in last_messages.result {
         let ln_info = build_message(update);
         println!("{}", ln_info);
         if let Err(_) = send_ln.send(ln_info).await {
