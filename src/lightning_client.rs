@@ -16,18 +16,18 @@ pub fn setup_client(settings: &configuration::Settings) -> ClientWrapper {
 }
 
 // Polling lightning node done here
-pub async fn check_hidden_service(client: &ClientWrapper, check_url:&str, macaroon:&str, send_tel:Sender<TelInfo>) -> Result<()>{
+pub async fn check_hidden_service(client: &ClientWrapper,ln_info: LnInfo, check_url:&str, macaroon:&str, send_tel:Sender<TelInfo>) -> Result<()>{
     let command = "/v1/getinfo";
     let start = Instant::now() + Duration::from_secs(20);
     let mut interval = interval_at(start, Duration::from_secs(30));
     loop {
         interval.tick().await;
-        get_command_node(&client, check_url.to_string(),macaroon.to_string(), send_tel.clone(), command.to_string()).await?;
+        get_command_node(&client, ln_info, check_url.to_string(),macaroon.to_string(), send_tel.clone(), command.to_string()).await?;
     }
 }
 
-
-pub async fn get_command_node(client: &ClientWrapper, check_url:String, macaroon:String, send_tel:Sender<TelInfo>, command:String)-> Result<(), reqwest::Error> {
+//TODO: Clean response from node to be clear/simple to end user
+pub async fn get_command_node(client: &ClientWrapper, ln_info: LnInfo, check_url:String, macaroon:String, send_tel:Sender<TelInfo>, command:String)-> Result<(), reqwest::Error> {
     
     let url = build_url(check_url, &command);
     println!("{0}", url);
@@ -42,12 +42,12 @@ pub async fn get_command_node(client: &ClientWrapper, check_url:String, macaroon
 
         match res.status() {
             StatusCode::OK => {
-                handle_success_request(res, &command, send_tel)
+                handle_success_request(res,ln_info, &command, send_tel)
                             .await
                             .unwrap();
             }
             StatusCode::CONTINUE => {
-                handle_request_err(res, &command, send_tel)
+                handle_request_err(res,ln_info, &command, send_tel)
                             .await
                             .unwrap();
             }
@@ -63,15 +63,16 @@ fn build_headers(macaroon: &str) -> HeaderMap {
     return headers;
 }
 
-async fn handle_success_request(res: reqwest::Response,command:&str, send_tel:Sender<TelInfo>) -> Result<(), reqwest::Error>{
+async fn handle_success_request(res: reqwest::Response, ln_info:LnInfo, command:&str, send_tel:Sender<TelInfo>) -> Result<(), reqwest::Error>{
     let text = res.text().await?;
 
     println!("Response: {}", text);
     let tel_message = TelInfo {
-        user_id:"".to_string(),
+        user_id:ln_info.user_id,
         command:command.to_string(),
         is_active:true,
         message:text,
+        chat_id:ln_info.chat_id
     };
     println!("handle_success_request");
     println!("{}", tel_message);
@@ -82,13 +83,14 @@ async fn handle_success_request(res: reqwest::Response,command:&str, send_tel:Se
 }
 
 
-async fn handle_request_err(res: reqwest::Response,command:&str, send_tel:Sender<TelInfo>) -> Result<(), reqwest::Error>{
+async fn handle_request_err(res: reqwest::Response, ln_info:LnInfo, command:&str, send_tel:Sender<TelInfo>) -> Result<(), reqwest::Error>{
     let text = res.text().await?;
     let tel_message = TelInfo {
-        user_id:"".to_string(),
+        user_id:ln_info.user_id,
         command:command.to_string(),
         is_active:true,
         message:text,
+        chat_id:ln_info.chat_id,
     };
     println!("handle_request_err");
     println!("{}", tel_message);

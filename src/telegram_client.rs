@@ -1,4 +1,5 @@
-use crate::channel_handler::{LnInfo};
+use std::collections::HashMap;
+use crate::channel_handler::{LnInfo, TelInfo};
 use crate::configuration;
 use tokio::sync::mpsc::{Sender};
 use tokio::time::{Instant, Duration, interval_at};
@@ -8,6 +9,8 @@ use reqwest::{
 };
 use crate::client_wrapper::{ClientWrapper, build_url};
 use anyhow::Result;
+use crate::telegram_objects::*;
+
 
 
 pub fn setup_client(settings: &configuration::Settings) -> ClientWrapper {
@@ -33,7 +36,7 @@ pub async fn poll_messages<'a>(client: ClientWrapper, settings: &configuration::
     }
 }
 
-async fn get_message<'a>(client: &ClientWrapper, settings: &configuration::Settings, send_tel:Sender<LnInfo>) -> Result<(), reqwest::Error>{
+async fn get_message<'a>(client: &ClientWrapper, settings: &configuration::Settings, send_ln:Sender<LnInfo>) -> Result<(), reqwest::Error>{
     let base_url = build_full_base(settings);
 
     let res = client.client
@@ -44,22 +47,52 @@ async fn get_message<'a>(client: &ClientWrapper, settings: &configuration::Setti
 
     println!("Status: {}", res.status());
 
-    let text = res.text().await?;
-
-    println!("Response: {}", text);
+    let last_messages = res.json::<Vec<Update>>().await.unwrap();
+    println!("Response: {:#?}", last_messages);
     //TODO: pull from key/value file userId -> node_url &macaroon mapping made at "registration";
+    
+   for update in last_messages {
+        let mut chat_id = -1;
+        let mut text:String = "".to_string(); 
+        let mut user_id:String = "".to_string();
+        match update.message {
+            Some(mes) => {
+                chat_id = mes.chat.id;
+                match mes.text {
+                    Some(t) => {
+                        text = t;
+                    }
+                    None => {}
+                }
+                match mes.username {
+                    Some(un) => {
+                        user_id = un;
+                    }
+                    None => {}
+                }
+            }
+            None => {}
+        } 
+        //TODO: 
+        // determine what command to send to ln based on user messages
+        // find users already registered node in key/value file
 
-    let tel_info = LnInfo{
-        node_url:"".to_string(),
-        command:"".to_string(),
-        is_active:true,
-        message:text,
+        let tel_info = LnInfo{
+            node_url:"".to_string(),
+            command:"".to_string(),
+            is_active:true,
+            message:text,
+            chat_id:chat_id,
+            user_id: user_id
+        };
+        println!("{}", tel_info);
+        if let Err(_) = send_ln.send(tel_info).await {
+            println!("receiver dropped");
+        }
+        println!("After Send");
+
     };
-    println!("{}", tel_info);
-    if let Err(_) = send_tel.send(tel_info).await {
-        println!("receiver dropped");
-    }
-    println!("After Send");
+
     Ok(())
 }
 
@@ -67,17 +100,19 @@ pub fn build_full_base(settings: &configuration::Settings) -> String{
     return settings.telegram_base_url.to_string()+&settings.telegram_bot_id.to_owned();
 }
 
-/*
-pub async fn send_message<'a>(settings: &configuration::Settings,client: ClientWrapper<'a>, recieve_ln: LnInfo) ->  Result<(), reqwest::Error>{
+pub async fn send_message(client: ClientWrapper, settings: &configuration::Settings, recieve_tn: TelInfo) ->  Result<(), reqwest::Error>{
     let base_url = build_full_base(settings);
+    let message = Message{
+        chat_id: recieve_tn.chat_id,
+        text: &recieve_tn.message
+    };
 
-    let message = json::parse(
-    format!("{""chat_id"":""{0}"",\n\r\"text\":\"{1}\",\n\r}",2222, recieve_ln.message);
+    let message_send = build_url(base_url,"/sendMessage");
 
     let res = client.client
-        .post(client.build_url(base_url,"/getMe"))
-        .body(message)
-        .headers(*client.headers)
+        .post(message_send)
+        .headers(build_headers())
+        .json(&message)
         .send()
         .await?;
 
@@ -89,8 +124,4 @@ pub async fn send_message<'a>(settings: &configuration::Settings,client: ClientW
 
     Ok(())
 
-} */ 
-
-
-
-
+}

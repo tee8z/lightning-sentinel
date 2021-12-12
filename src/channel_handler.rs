@@ -3,6 +3,8 @@ use tokio::sync::mpsc::{channel, Sender, Receiver};
 use std::fmt;
 
 pub struct LnInfo {
+    pub user_id:String,
+    pub chat_id:i64
     pub node_url:String,
     pub command:String,
     pub is_active:bool,
@@ -17,6 +19,7 @@ impl fmt::Display for LnInfo {
 
 pub struct TelInfo {
     pub user_id:String,
+    pub chat_id:i64
     pub command:String,
     pub is_active:bool,
     pub message:String,
