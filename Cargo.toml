@@ -3,7 +3,7 @@ name = "lightning-sentinel"
 version = "0.1.0"
 edition = "2021"
 authors = ["tee8z <tee8z@protonmail.com>"]
-liscense = "LISCENSE"
+license = "LISCENSE"
 
 description = "A tool to be notified if lightning node went done via REST requests over tor & a telegram message"
 
