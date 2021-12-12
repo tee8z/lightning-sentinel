@@ -1,3 +1,4 @@
+/* eslint no-use-before-define: 0 */
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -397,6 +398,12 @@ pub struct Chat {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<ChatLocation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SendMessage {
+    pub chat_id: i64,
+    pub text: String
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

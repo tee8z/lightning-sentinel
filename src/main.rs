@@ -1,14 +1,19 @@
-mod configuration;
-mod tor_proxy;
-mod lightning_client;
-mod telegram_client;
-mod channel_handler;
-mod client_wrapper;
-mod telegram_objects;
-
 use log::{info,error};
-use crate::configuration::SETTINGS;
 use anyhow::Result;
+
+mod tor_proxy;
+mod clients;
+mod objects;
+mod pickledb_wrapper;
+mod channels;
+mod config_wrapper;
+
+use channels::Messages;
+use clients::telegram_client;
+use clients::lightning_client;
+use config_wrapper::SETTINGS;
+use tor_proxy::tor_proxy::tor;
+use pickledb_wrapper::Pickle;
 
 //TODO: make interval of polling dependant on user's settings
 
@@ -16,10 +21,12 @@ use anyhow::Result;
 async fn main() -> Result<()> {
     
     tokio::spawn(async move {
-        tor_proxy::tor(SETTINGS.socks_port_local);
+        tor(config_wrapper::SETTINGS.socks_port_local);
     });
-
-    let channels = channel_handler::Messages::new();
+    
+    let db = Pickle::new();
+    
+    let channels = Messages::new();
     let (send_lnd, mut recieve_ln) = channels.lightning_messages;
     let (send_tel, mut recieve_tel) = channels.telegram_messages;
 
@@ -35,7 +42,10 @@ async fn main() -> Result<()> {
             // - Regular pin, everything up/fine, not requested by user
             Some(ln_info) =>{ 
                 println!("recieve_ln: {}", ln_info);
-                lightning_client::check_hidden_service(&lnd_client,ln_info, &SETTINGS.check_url, &SETTINGS.macaroon, send_tel)
+                lightning_client::check_hidden_service(&lnd_client,
+                                                        ln_info, 
+                                                        db, 
+                                                        send_tel)
                                 .await
                                 .unwrap();
             },
@@ -58,6 +68,9 @@ async fn main() -> Result<()> {
     });
     //TODO: At startup, load registered users and kick off watching their hiddens services (in another task)
 
+   /*tokio::spawn(async move {
+        // Load user tor service watchers here
+    })*/
 
     //NOTE: Should be one task polling the telegram bot for new messages
     telegram_client::poll_messages(telegram_client_clone, &*SETTINGS, send_lnd)

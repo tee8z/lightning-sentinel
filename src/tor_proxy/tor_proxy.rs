@@ -1,5 +1,3 @@
-use crate::configuration;
-
 use libtor::{HiddenServiceVersion, Tor, TorAddress, TorFlag};
 
 //blocking

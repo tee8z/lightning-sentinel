@@ -1,19 +1,20 @@
 use std::collections::HashMap;
-use crate::channel_handler::{LnInfo, TelInfo};
-use crate::configuration;
+use crate::channels::{ChannelMessage, ChannelType};
+use crate::config_wrapper;
 use tokio::sync::mpsc::{Sender};
 use tokio::time::{Instant, Duration, interval_at};
 use reqwest::{
     StatusCode,
     header::{HeaderMap, HeaderValue}
 };
-use crate::client_wrapper::{ClientWrapper, build_url};
+use super::client_wrapper::{ClientWrapper, build_url};
 use anyhow::Result;
-use crate::telegram_objects::*;
+use crate::objects::{SendMessage, Update};
+use crate::config_wrapper::Settings;
 
 
 
-pub fn setup_client(settings: &configuration::Settings) -> ClientWrapper {
+pub fn setup_client(settings: &Settings) -> ClientWrapper {
     let client = ClientWrapper::new(settings);
     return client;
 }
@@ -26,7 +27,7 @@ fn build_headers() -> HeaderMap{
 }
 
 //TODO: implement long polling
-pub async fn poll_messages<'a>(client: ClientWrapper, settings: &configuration::Settings, send_tel:Sender<LnInfo>) -> Result<(), reqwest::Error>{
+pub async fn poll_messages<'a>(client: ClientWrapper, settings: &Settings, send_tel:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
     let start = Instant::now() + Duration::from_secs(20);
     let mut interval = interval_at(start, Duration::from_secs(60));
     loop {
@@ -36,7 +37,7 @@ pub async fn poll_messages<'a>(client: ClientWrapper, settings: &configuration::
     }
 }
 
-async fn get_message<'a>(client: &ClientWrapper, settings: &configuration::Settings, send_ln:Sender<LnInfo>) -> Result<(), reqwest::Error>{
+async fn get_message<'a>(client: &ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
     let base_url = build_full_base(settings);
 
     let res = client.client
@@ -52,41 +53,9 @@ async fn get_message<'a>(client: &ClientWrapper, settings: &configuration::Setti
     //TODO: pull from key/value file userId -> node_url &macaroon mapping made at "registration";
     
    for update in last_messages {
-        let mut chat_id = -1;
-        let mut text:String = "".to_string(); 
-        let mut user_id:String = "".to_string();
-        match update.message {
-            Some(mes) => {
-                chat_id = mes.chat.id;
-                match mes.text {
-                    Some(t) => {
-                        text = t;
-                    }
-                    None => {}
-                }
-                match mes.username {
-                    Some(un) => {
-                        user_id = un;
-                    }
-                    None => {}
-                }
-            }
-            None => {}
-        } 
-        //TODO: 
-        // determine what command to send to ln based on user messages
-        // find users already registered node in key/value file
-
-        let tel_info = LnInfo{
-            node_url:"".to_string(),
-            command:"".to_string(),
-            is_active:true,
-            message:text,
-            chat_id:chat_id,
-            user_id: user_id
-        };
-        println!("{}", tel_info);
-        if let Err(_) = send_ln.send(tel_info).await {
+        let ln_info = build_message(update);
+        println!("{}", ln_info);
+        if let Err(_) = send_ln.send(ln_info).await {
             println!("receiver dropped");
         }
         println!("After Send");
@@ -96,15 +65,49 @@ async fn get_message<'a>(client: &ClientWrapper, settings: &configuration::Setti
     Ok(())
 }
 
-pub fn build_full_base(settings: &configuration::Settings) -> String{
+fn build_message(update: Update) -> ChannelMessage {
+    let mut chat_id = -1;
+    let mut text:String = "".to_string(); 
+    match update.message {
+        Some(mes) => {
+            chat_id = mes.chat.id;
+            match mes.text {
+                Some(t) => {
+                    text = t;
+                }
+                None => {}
+            }
+        }
+        None => {}
+    }
+
+    //TODO: call in-memory collection for node_url
+    //let row = 
+
+    let ln_info = ChannelMessage{
+        channel_type: ChannelType::LN,
+        chat_id:chat_id,
+        node_url:"".to_string(),
+        command:"".to_string(),
+        message:text,
+        macaroon:"".to_string()
+    };
+
+    return ln_info;
+}
+
+
+
+
+pub fn build_full_base(settings: &Settings) -> String{
     return settings.telegram_base_url.to_string()+&settings.telegram_bot_id.to_owned();
 }
 
-pub async fn send_message(client: ClientWrapper, settings: &configuration::Settings, recieve_tn: TelInfo) ->  Result<(), reqwest::Error>{
+pub async fn send_message(client: ClientWrapper, settings: &Settings, recieve_tn: ChannelMessage) ->  Result<(), reqwest::Error>{
     let base_url = build_full_base(settings);
-    let message = Message{
+    let message = SendMessage{
         chat_id: recieve_tn.chat_id,
-        text: &recieve_tn.message
+        text: recieve_tn.message
     };
 
     let message_send = build_url(base_url,"/sendMessage");

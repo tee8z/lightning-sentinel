@@ -1,7 +1,7 @@
 use reqwest::{
     header::{HeaderMap }
 };
-use crate::configuration;
+use crate::config_wrapper::Settings;
 
 #[derive(Debug, Clone)]
 pub struct ClientWrapper{
@@ -9,7 +9,7 @@ pub struct ClientWrapper{
 }
 
 impl ClientWrapper{
-    pub fn new(settings: &configuration::Settings) -> Self { 
+    pub fn new(settings: &Settings) -> Self { 
 
         let proxy = reqwest::Proxy::all(build_poxy_location(settings))
         .expect("tor proxy should be there");
@@ -25,7 +25,7 @@ impl ClientWrapper{
     }
     
 }
-pub fn build_poxy_location(settings: &configuration::Settings) -> String {
+pub fn build_poxy_location(settings: &Settings) -> String {
     let proxy_url = settings.sock_url_local.to_string();
     let proxy_port_str = settings.socks_port_local.to_string();
     let full_proxy = proxy_url.to_string() +":"+ &proxy_port_str;

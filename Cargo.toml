@@ -18,3 +18,5 @@ tokio = { version = "1.14.0", features = ["full", "time", "sync"] }
 futures = "0.3.18"
 lazy_static = "1.4"
 serde = { version = "1.0.117", features = ["derive"] }
+pickledb = "0.4.1"
+dirs = "4.0.0"
