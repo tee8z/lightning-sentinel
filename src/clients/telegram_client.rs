@@ -1,15 +1,17 @@
 use crate::channels::{ChannelMessage, ChannelType};
+use crate::objects::{SendMessage, Update};
+use crate::config_wrapper::Settings;
+use super::client_wrapper::{ClientWrapper, build_url};
 use tokio::sync::mpsc::{Sender};
 use tokio::time::{Instant, Duration, interval_at};
 use reqwest::{
     header::{HeaderMap, HeaderValue}
 };
 use serde::{Deserialize, Serialize};
-use super::client_wrapper::{ClientWrapper, build_url};
 use anyhow::Result;
-use crate::objects::{SendMessage, Update};
-use crate::config_wrapper::Settings;
 use log::{info,error};
+use std::cmp::Reverse;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 
 pub fn setup_client(settings: &Settings) -> ClientWrapper {
@@ -23,7 +25,6 @@ fn build_headers() -> HeaderMap{
     headers.insert("Content-Type",header_val);
     return headers;
 }
-
 
 pub async fn poll_messages<'a>(client: ClientWrapper, settings: &Settings, send_tel:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
     let start = Instant::now() + Duration::from_secs(20);
@@ -40,12 +41,29 @@ struct Response {
     pub result: Vec<Update>
 }
 
+
+static LAST_UPDATE: AtomicU32 = AtomicU32::new(u32::MIN);
+
+fn set_update(update_id: u32) -> Result<u32, u32>{
+    let cur = LAST_UPDATE.load(Ordering::SeqCst);
+    LAST_UPDATE.compare_exchange(cur,update_id,Ordering::SeqCst, Ordering::Acquire)
+}
+
+
+//TODO: pipe the messages depending on text recieved from user
 async fn get_message<'a>(client: &ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
     let base_url = build_full_base(settings);
 
-    //TODO add offset logic to get only newest updates
+    let command_url;
+    if LAST_UPDATE.load(Ordering::SeqCst) > 0 {
+        command_url = format!("/getUpdates?offset={}&allowed_updates=[\"message\",\"callback_query\"]", LAST_UPDATE.load(Ordering::SeqCst));
+    }
+    else{
+        command_url = "/getUpdates?allowed_updates=[\"message\",\"callback_query\"]".to_string();
+    }
+
     let res = client.client
-        .get(build_url(base_url,"/getUpdates?=allowed_updates=[\"message\",\"callback_query\"]"))
+        .get(build_url(base_url, &command_url))
         .headers(build_headers())
         .send()
         .await?;
@@ -54,17 +72,28 @@ async fn get_message<'a>(client: &ClientWrapper, settings: &Settings, send_ln:Se
 
     let last_messages = res.json::<Response>().await.unwrap();
     info!("Response: {:#?}", last_messages);
-    //TODO: pull from key/value file userId -> node_url &macaroon mapping made at "registration";
-    
-   for update in last_messages.result {
+
+    let mut update_ids = vec![];
+
+    for update in last_messages.result {
+        let update_id = update.update_id.clone();
+        update_ids.push(update_id);
+
         let ln_info = build_message(update);
         info!("{}", ln_info);
         if let Err(_) = send_ln.send(ln_info).await {
             error!("receiver dropped");
         }
         info!("After Send");
-
     };
+
+    update_ids.sort_by_key(|update_id| Reverse(*update_id));
+
+    let last_message_time = update_ids[0];
+
+    if last_message_time > LAST_UPDATE.load(Ordering::SeqCst){
+        set_update(last_message_time).unwrap();
+    }
 
     Ok(())
 }
