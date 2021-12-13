@@ -18,7 +18,21 @@ pub struct ChannelMessage {
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum ChannelType {
     LN = 0x00,
-    TEL = 0x01
+    TEL = 0x01,
+    DEF = 0x02
+}
+
+impl Default for ChannelMessage {
+    fn default() -> ChannelMessage {
+        return ChannelMessage {
+            channel_type:ChannelType::DEF,
+            chat_id:i64::MIN,
+            node_url:"".to_string(),
+            command:"".to_string(),
+            message:"".to_string(),
+            macaroon:"".to_string()
+        }
+    }
 }
 
 impl fmt::Display for ChannelType {

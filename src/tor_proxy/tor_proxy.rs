@@ -1,4 +1,5 @@
 use libtor::{HiddenServiceVersion, Tor, TorAddress, TorFlag};
+use log::{info,error};
 
 //blocking
 pub fn tor(proxy_port: u16) {
@@ -13,8 +14,8 @@ pub fn tor(proxy_port: u16) {
         ))
         .start()
     {
-        Ok(r) =>{ println!("tor exit result: {}", r);},
-        Err(e) =>{ eprintln!("tor error: {}", e); },
+        Ok(r) =>{ info!("tor exit result: {}", r);},
+        Err(e) =>{ error!("tor error: {}", e); },
     };
 }
 

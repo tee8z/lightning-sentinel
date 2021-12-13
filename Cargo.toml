@@ -12,11 +12,13 @@ repository = "https://github.com/tee8z/llightning-sentinel"
 anyhow = "1.0"
 libtor = "46.6.1+0.4.6.6"
 log = "0.4.14"
+env_logger = " 0.9.0"
 config = "0.11.0"
 reqwest = { version = "0.11.7", features = ["socks", "json"] }
 tokio = { version = "1.14.0", features = ["full", "time", "sync"] }
 futures = "0.3.18"
 lazy_static = "1.4"
 serde = { version = "1.0.117", features = ["derive"] }
+serde_json = "1.0.72"
 pickledb = "0.4.1"
 dirs = "4.0.0"

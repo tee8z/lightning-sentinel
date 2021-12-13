@@ -1,9 +1,7 @@
 use crate::channels::{ChannelMessage, ChannelType};
-use crate::config_wrapper;
 use tokio::sync::mpsc::{Sender};
 use tokio::time::{Instant, Duration, interval_at};
 use reqwest::{
-    StatusCode,
     header::{HeaderMap, HeaderValue}
 };
 use serde::{Deserialize, Serialize};
@@ -11,7 +9,7 @@ use super::client_wrapper::{ClientWrapper, build_url};
 use anyhow::Result;
 use crate::objects::{SendMessage, Update};
 use crate::config_wrapper::Settings;
-
+use log::{info,error};
 
 
 pub fn setup_client(settings: &Settings) -> ClientWrapper {
@@ -26,7 +24,7 @@ fn build_headers() -> HeaderMap{
     return headers;
 }
 
-//TODO: implement long polling
+
 pub async fn poll_messages<'a>(client: ClientWrapper, settings: &Settings, send_tel:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
     let start = Instant::now() + Duration::from_secs(20);
     let mut interval = interval_at(start, Duration::from_secs(60));
@@ -42,11 +40,6 @@ struct Response {
     pub result: Vec<Update>
 }
 
-//TODO: pipe message to different locations depending on if it's:
-    // - registration (ln_url, macraroon),
-    // - on_demand (call registered ln node)
-    // - ignore (any other type of message send options for commands back to user)
-
 async fn get_message<'a>(client: &ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
     let base_url = build_full_base(settings);
 
@@ -57,24 +50,60 @@ async fn get_message<'a>(client: &ClientWrapper, settings: &Settings, send_ln:Se
         .send()
         .await?;
 
-    println!("Status: {}", res.status());
+    info!("Status: {}", res.status());
 
     let last_messages = res.json::<Response>().await.unwrap();
-    println!("Response: {:#?}", last_messages);
+    info!("Response: {:#?}", last_messages);
     //TODO: pull from key/value file userId -> node_url &macaroon mapping made at "registration";
     
    for update in last_messages.result {
         let ln_info = build_message(update);
-        println!("{}", ln_info);
+        info!("{}", ln_info);
         if let Err(_) = send_ln.send(ln_info).await {
-            println!("receiver dropped");
+            error!("receiver dropped");
         }
-        println!("After Send");
+        info!("After Send");
 
     };
 
     Ok(())
 }
+
+fn info_messages(action: String) -> String {
+    let signup = String::from("signup");
+    let status = String::from("status");
+    let remove = String::from("remove");
+
+    match action {
+        signup => {
+            return r#"Signup by sending:
+                        1) tor address of your lighting node,
+                        2) macaroon with the permissions to /getInfo endpoint
+                    Reply to this message with a tuple (<lightning REST API tor address>,<macaroon>), ex:
+                            (https://<wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion>:8080,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY)
+                    NOTE: Please look at this bot's README for details on obtaining these values,
+                     & other instructions on setup, if these values are new to you. The bot's README
+                     can be found here: https://github.com/tee8z/llightning-sentinel/blob/main/README.md"#.to_string()
+        },
+        status => {
+            return r#"Status of your node:
+                        Active: {}
+                        Channels: 
+                            {}
+                       "#.to_string()
+        },
+        remove => {
+            return r#"Your data has been removed and your sentinel has stood down"#.to_string()
+        }
+        _ => {
+           return r#"Please try one of the available options, your message was not understood:
+                    - signup
+                    - status
+                    - remove"#.to_string()
+        }
+    }
+}
+
 
 fn build_message(update: Update) -> ChannelMessage {
     let mut chat_id = -1;
@@ -92,9 +121,8 @@ fn build_message(update: Update) -> ChannelMessage {
         None => {}
     }
 
-    //TODO: call in-memory collection for node_url
-    //let row = 
 
+    //TODO, pick up node_url and macaroon from user answer and add to message
     let ln_info = ChannelMessage{
         channel_type: ChannelType::LN,
         chat_id:chat_id,
@@ -106,8 +134,6 @@ fn build_message(update: Update) -> ChannelMessage {
 
     return ln_info;
 }
-
-
 
 
 pub fn build_full_base(settings: &Settings) -> String{
@@ -130,11 +156,11 @@ pub async fn send_message(client: ClientWrapper, settings: &Settings, recieve_tn
         .send()
         .await?;
 
-    println!("Status: {}", res.status());
+    info!("Status: {}", res.status());
 
     let text = res.text().await?;
 
-    println!("Response: {}", text);
+    info!("Response: {}", text);
 
     Ok(())
 
