@@ -204,7 +204,7 @@ fn info_messages(action: String) -> (String,String) {
 
 fn parse_address_token(message: &str) -> (String, String){
     lazy_static! {
-        static ref USER_INFO: Regex = Regex::new(r"\((https:\/\/(\S+)onion:\d{4}),((\S{258}))\)").unwrap();
+        static ref USER_INFO: Regex = Regex::new(r"https://(\S+)onion:\d{4},\S{258}").unwrap();
     }
     if USER_INFO.is_match(message){
         let found_data = USER_INFO.captures(message).unwrap();
