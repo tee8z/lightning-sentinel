@@ -570,10 +570,12 @@ dependencies = [
  "libtor",
  "log",
  "pickledb",
+ "regex",
  "reqwest",
  "serde 1.0.131",
  "serde_json",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

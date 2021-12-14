@@ -1,6 +1,6 @@
 /* eslint no-use-before-define: 0 */
 use serde::{Deserialize, Serialize};
-
+use std::fmt;
 
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -397,6 +397,12 @@ pub struct SendMessage {
     pub chat_id: i64,
     pub text: String
 }
+impl fmt::Display for SendMessage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        return write!(f, "{:?}", self);
+    }
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Message {

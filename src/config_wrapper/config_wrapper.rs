@@ -1,7 +1,7 @@
 
 use config::{Config, File, Environment};
-
-lazy_static::lazy_static! {
+use lazy_static::lazy_static;
+lazy_static! {
     pub static ref SETTINGS: Settings = Settings::new();
 }
 

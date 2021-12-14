@@ -83,12 +83,21 @@ impl PickleJar {
             }
          }
     }
+     
+    pub async fn add(self, telegram_client_id: &str, row: Row) {
+        let mut guard = self.db.lock()
+                               .await;
+    
+        let unlock_db = &mut *guard;
+        
+        unlock_db.ladd(telegram_client_id, &row);
+    }
 
     pub async fn remove(self, telegram_user_id: &str) -> bool {
         let mut guard = self.db.lock()
                             .await;
         
-        let mut unlock_db = &mut *guard;
+        let unlock_db = &mut *guard;
 
         match unlock_db.rem(telegram_user_id) {
             Ok(v) => {
@@ -105,13 +114,6 @@ impl PickleJar {
                 return false;
             }
         };
-    }
-
-    pub async fn get_keys(self) -> Vec<String> {
-        let guard = self.db.lock()
-                        .await;
-        let unlock_db = & *guard;
-        return unlock_db.get_all();
     }
 
     pub async fn get_values(self) -> Vec<Row> {

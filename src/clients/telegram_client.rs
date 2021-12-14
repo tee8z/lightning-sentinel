@@ -1,6 +1,7 @@
-use crate::channels::{ChannelMessage, ChannelType};
+use crate::channels::{ChannelMessage, ChannelType, ThreadsMap};
 use crate::objects::{SendMessage, Update};
 use crate::config_wrapper::Settings;
+use crate::pickle_jar::{PickleJar, Row};
 use super::client_wrapper::{ClientWrapper, build_url};
 use tokio::sync::mpsc::{Sender};
 use tokio::time::{Instant, Duration, interval_at};
@@ -10,9 +11,11 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use anyhow::Result;
 use log::{info,error};
-use std::cmp::Reverse;
-use std::sync::atomic::{AtomicU32, Ordering};
-
+use std::{
+    sync::{Arc, atomic::{AtomicU32, Ordering}},
+    cmp::Reverse};
+use lazy_static::lazy_static;
+use regex::Regex;
 
 pub fn setup_client(settings: &Settings) -> ClientWrapper {
     let client = ClientWrapper::new(settings);
@@ -26,13 +29,14 @@ fn build_headers() -> HeaderMap{
     return headers;
 }
 
-pub async fn poll_messages<'a>(client: ClientWrapper, settings: &Settings, send_tel:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
+pub async fn poll_messages(client: ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>, pickle:PickleJar, ln_threads:ThreadsMap) -> Result<(), reqwest::Error>{
     let start = Instant::now() + Duration::from_secs(20);
     let mut interval = interval_at(start, Duration::from_secs(60));
     loop {
         interval.tick().await;
-        let sender = send_tel.clone();
-        get_message(&client, settings, sender).await?;
+        get_message(&client, settings, send_ln.clone(),
+        PickleJar::new(Arc::clone(&pickle.db)), 
+        ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads))).await?;
     }
 }
 #[derive(Serialize, Deserialize, Debug)]
@@ -50,8 +54,7 @@ fn set_update(update_id: u32) -> Result<u32, u32>{
 }
 
 
-//TODO: pipe the messages depending on text recieved from user
-async fn get_message<'a>(client: &ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
+async fn get_message(client: &ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>,pickle:PickleJar, ln_threads:ThreadsMap) -> Result<(), reqwest::Error>{
     let base_url = build_full_base(settings);
 
     let command_url;
@@ -79,12 +82,21 @@ async fn get_message<'a>(client: &ClientWrapper, settings: &Settings, send_ln:Se
         let update_id = update.update_id.clone();
         update_ids.push(update_id);
 
-        let ln_info = build_message(update);
-        info!("{}", ln_info);
-        if let Err(_) = send_ln.send(ln_info).await {
-            error!("receiver dropped");
-        }
-        info!("After Send");
+       handle_message(
+                    client.clone(),
+                    update.message
+                            .clone()
+                            .unwrap()
+                            .chat.id, 
+                      update.message
+                            .unwrap()
+                            .text
+                            .unwrap(),
+                    settings,
+                    PickleJar::new(Arc::clone(&pickle.db)), 
+                    ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads)),
+                    send_ln.clone())
+                    .await;
     };
 
     update_ids.sort_by_key(|update_id| Reverse(*update_id));
@@ -98,67 +110,122 @@ async fn get_message<'a>(client: &ClientWrapper, settings: &Settings, send_ln:Se
     Ok(())
 }
 
-fn info_messages(action: String) -> String {
-    let signup = String::from("signup");
-    let status = String::from("status");
-    let remove = String::from("remove");
+async fn handle_message(client: ClientWrapper, 
+                        chat_id: i64, 
+                        message: String, 
+                        settings:&Settings, 
+                        pickle:PickleJar,
+                        ln_threads:ThreadsMap, 
+                        send_ln:Sender<ChannelMessage>) {
+    let address_mac = parse_address_token(&message);
+    let parse = info_messages(message);
+    let parse_cl = parse.clone();
 
-    match action {
-        signup => {
-            return r#"Signup by sending:
+    if address_mac.0.len() > 0 || parse.0 == "status" {
+        let ln_info = build_message(chat_id.clone(), address_mac.0.clone(), address_mac.1.clone(), parse.0.clone());
+        if address_mac.0.len() > 0 {
+            let row = Row{
+                telegram_chat_id:chat_id.clone(), 
+                node_url: address_mac.0.clone(),
+                macaroon: address_mac.1.clone(),
+                is_watching: true,
+            };
+            pickle.add(&chat_id.to_string(), row)
+                  .await;
+        }
+
+
+        if let Err(_) = send_ln.send(ln_info)
+            .await {
+            error!("receiver dropped");
+        }
+    }
+    else if parse_cl.0 == "help" || parse_cl.0 == "start" || parse_cl.0 == "bad" || parse.0.clone() == "stop" {
+        if parse.0.clone() == "stop"{
+            ln_threads.cancel(chat_id);
+            pickle.remove(&chat_id.to_string())
+                  .await;
+        }
+        let message = SendMessage {
+            chat_id: chat_id,
+            text: parse_cl.1
+        };
+        send_message(client, settings, message)
+        .await
+        .unwrap();
+        
+        return;
+    }
+    return;
+
+}
+
+fn info_messages(action: String) -> (String,String) {
+    match action.as_str() {
+        "/start" => {
+            return ("start".to_string(),r#"Signup by sending:
                         1) tor address of your lighting node,
                         2) macaroon with the permissions to /getInfo endpoint
                     Reply to this message with a tuple (<lightning REST API tor address>,<macaroon>), ex:
                             (https://<wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion>:8080,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY)
                     NOTE: Please look at this bot's README for details on obtaining these values,
                      & other instructions on setup, if these values are new to you. The bot's README
-                     can be found here: https://github.com/tee8z/llightning-sentinel/blob/main/README.md"#.to_string()
+                     can be found here: https://github.com/tee8z/llightning-sentinel/blob/main/README.md"#.to_string())
         },
-        status => {
-            return r#"Status of your node:
+        "/help" => {
+            return ("help".to_string(),r#"
+                To use this bot please use one of the following commands
+                    - /start => register lightning node with it's onion address for it's REST api and macaroon
+                    - /status => once registered, call to see current status of node and channels
+                    - /stop => delete registered node from bot, all data will be removed and watcher stopped
+                    - /help => see list of commands for this bot
+            "#.to_string());
+        }
+        "/status" => {
+            return ("status".to_string(),r#"Status of your node:
                         Active: {}
                         Channels: 
                             {}
-                       "#.to_string()
+                       "#.to_string());
         },
-        remove => {
-            return r#"Your data has been removed and your sentinel has stood down"#.to_string()
-        }
+        "/stop" => {
+            return ("stop".to_string(),r#"Your data has been removed and your sentinel has stood down"#.to_string());
+        },
         _ => {
-           return r#"Please try one of the available options, your message was not understood:
-                    - signup
-                    - status
-                    - remove"#.to_string()
+            return ("bad".to_string(),r#"Please try one of the available options, your message was not understood:
+                        - /start
+                        - /help
+                        - /status
+                        - /stop"#.to_string());
+
         }
     }
 }
 
-
-fn build_message(update: Update) -> ChannelMessage {
-    let mut chat_id = -1;
-    let mut text:String = "".to_string(); 
-    match update.message {
-        Some(mes) => {
-            chat_id = mes.chat.id;
-            match mes.text {
-                Some(t) => {
-                    text = t;
-                }
-                None => {}
-            }
-        }
-        None => {}
+fn parse_address_token(message: &str) -> (String, String){
+    lazy_static! {
+        static ref USER_INFO: Regex = Regex::new(r"\((https:\/\/(\S+)onion:\d{4}),((\S{258}))\)").unwrap();
+    }
+    if USER_INFO.is_match(message){
+        let found_data = USER_INFO.captures(message).unwrap();
+        let lightning_add = found_data.get(0).map_or("", |m| m.as_str());
+        let macaroon = found_data.get(1).map_or("", |m| m.as_str());
+        return (lightning_add.to_string(), macaroon.to_string());
     }
 
+    return ("".to_string(), "".to_string());
+}   
 
-    //TODO, pick up node_url and macaroon from user answer and add to message
-    let ln_info = ChannelMessage{
+
+fn build_message(chat_id:i64, node_url:String, macaroon:String, ln_command:String) -> ChannelMessage {
+
+    let ln_info = ChannelMessage {
         channel_type: ChannelType::LN,
         chat_id:chat_id,
-        node_url:"".to_string(),
-        command:"".to_string(),
-        message:text,
-        macaroon:"".to_string()
+        node_url:node_url,
+        macaroon:macaroon,
+        command:ln_command,
+        message:"".to_string(),
     };
 
     return ln_info;
@@ -169,12 +236,8 @@ pub fn build_full_base(settings: &Settings) -> String{
     return settings.telegram_base_url.to_string()+&settings.telegram_bot_id.to_owned();
 }
 
-pub async fn send_message(client: ClientWrapper, settings: &Settings, recieve_tn: ChannelMessage) ->  Result<(), reqwest::Error>{
+pub async fn send_message(client: ClientWrapper, settings: &Settings, message:SendMessage) ->  Result<(), reqwest::Error>{
     let base_url = build_full_base(settings);
-    let message = SendMessage{
-        chat_id: recieve_tn.chat_id,
-        text: recieve_tn.message
-    };
 
     let message_send = build_url(base_url,"/sendMessage");
 

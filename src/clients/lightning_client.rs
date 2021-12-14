@@ -132,7 +132,7 @@ pub async fn handle_check_service(ln_info: ChannelMessage, pickle: PickleJar) ->
 
 
 //TODO: Clean response from node to be clear/simple to end user
-pub async fn get_command_node(client: &ClientWrapper, ln_info: ChannelMessage, check_url:String, macaroon:String, send_tel:Sender<ChannelMessage>, command:String)-> Result<(), reqwest::Error> {
+pub async fn get_command_node<'a>(client: &ClientWrapper, ln_info: ChannelMessage, check_url:String, macaroon:String, send_tel:Sender<ChannelMessage>, command:String)-> Result<(), reqwest::Error> {
     
     let url = build_url(check_url, &command);
     info!("{0}", url);
@@ -147,12 +147,12 @@ pub async fn get_command_node(client: &ClientWrapper, ln_info: ChannelMessage, c
 
         match res.status() {
             StatusCode::OK => {
-                handle_success_request(res,ln_info, &command, send_tel)
+                handle_success_request(res,ln_info, &command, send_tel.clone())
                             .await
                             .unwrap();
             }
             StatusCode::CONTINUE => {
-                handle_request_err(res,ln_info, &command, send_tel)
+                handle_request_err(res,ln_info, &command, send_tel.clone())
                             .await
                             .unwrap();
             }
@@ -222,3 +222,4 @@ async fn handle_request_err(res: reqwest::Response, ln_info:ChannelMessage, comm
     }
     Ok(())
 }
+
