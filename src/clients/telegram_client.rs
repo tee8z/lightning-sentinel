@@ -170,7 +170,7 @@ fn info_messages(action: String) -> (String,String) {
     match action.as_str() {
         "/start" => {
             return ("start".to_string(),r#"Signup by sending:
-1) Tor address of your lighting node,
+1) Tor address of your lighting node's REST api
 2) Macaroon with the permissions to /getInfo endpoint
     
 Reply to this message with a tuple, ex:

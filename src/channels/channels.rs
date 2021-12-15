@@ -82,17 +82,26 @@ impl Messages {
 
 
 pub struct ThreadsMap {
-    pub ln_calling_threads: Arc<Mutex<HashMap<i64, CancellationToken>>>
+    pub ln_calling_threads: Arc<Mutex<HashMap<i64, Vec<CancellationToken>>>>
 }
 
 impl ThreadsMap {
     pub fn init() -> Self { 
         Self { ln_calling_threads:  Arc::new(Mutex::new(HashMap::new())) }
     }
-    pub fn new(ln_calling_threads:Arc<Mutex<HashMap<i64, CancellationToken>>>) -> ThreadsMap {
+    pub fn new(ln_calling_threads:Arc<Mutex<HashMap<i64, Vec<CancellationToken>>>>) -> ThreadsMap {
         Self { ln_calling_threads: ln_calling_threads}
     }
-    pub fn insert(self, key:i64, cancel_token: CancellationToken){
+    pub fn get(self, key:i64) -> &'static Vec<CancellationToken>{
+        match self.ln_calling_threads
+                .lock()
+                .unwrap()
+                .get(&key) {
+                    Some(cancel_tokens) => { return  cancel_tokens; }
+                    None => { return vec![]; }
+                }
+    }
+    pub fn insert(self, key:i64, cancel_token: Vec<CancellationToken>){
             self.ln_calling_threads
                 .lock()
                 .unwrap()
@@ -103,7 +112,11 @@ impl ThreadsMap {
             .lock()
             .unwrap()
             .get(&key) {
-                Some(cancel_token) => { cancel_token.cancel(); }
+                Some(cancel_tokens) => { 
+                    for cancel_token in cancel_tokens {
+                        cancel_token.cancel(); 
+                    } 
+                }
                 None => {}
             }
     }

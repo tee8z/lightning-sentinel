@@ -62,13 +62,16 @@ async fn main() -> Result<()> {
               }
     });
 
-    //NOTE: Listens for requests to send to uer's lightning notes based on requests from telegram messages
+    //NOTE: Listens for requests to send to user's lightning nodes based on requests from telegram messages
     tokio::spawn(async move {
         while let Some(ln_info) = recieve_ln.recv().await {
                 info!("recieve_ln: {}", ln_info);
                 let token = CancellationToken::new();
                 let ln_thread_lp = ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads));
-                ln_thread_lp.insert(ln_info.chat_id, token);
+                let ln_thread_lp_cp = ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads));
+                let mut tokens = ln_thread_lp.get(ln_info.chat_id.clone());
+                tokens.push(token);
+                ln_thread_lp_cp.insert(ln_info.chat_id, *tokens);
 
                 lightning_client::check_hidden_service(&lnd_client,
                                                         ln_info, 
@@ -97,8 +100,11 @@ async fn main() -> Result<()> {
                     macaroon: user.macaroon
                 };
                 let ln_thread_lp = ThreadsMap::new(Arc::clone(&ln_thread_cp.ln_calling_threads));
+                let ln_thread_lp_cp = ThreadsMap::new(Arc::clone(&ln_thread_cp.ln_calling_threads));
+                let mut tokens = ln_thread_lp.get(ln_info.chat_id.clone());
                 let token = CancellationToken::new();
-                ln_thread_lp.insert(ln_info.chat_id, token);
+                tokens.push(token);
+                ln_thread_lp_cp.insert(ln_info.chat_id, *tokens);
 
                 lightning_client::check_hidden_service(&lnd_client_initial.clone(),
                     ln_info, 

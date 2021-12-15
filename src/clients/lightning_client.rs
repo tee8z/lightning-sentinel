@@ -20,7 +20,6 @@ use std::{
 
 #[derive(Serialize, Deserialize)]
 struct UserInfoLn {
-    pub version: String, 
     pub commit_hash: String, 
     pub identity_pubkey: String, 
     pub alias: String, 
@@ -33,7 +32,6 @@ struct UserInfoLn {
 impl fmt::Display for UserInfoLn {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         return write!(f, r#"(
-            'version': '{}',
             'commit_hash': '{}',
             'identity_pubkey': '{}',
             'alias': '{}',
@@ -41,7 +39,7 @@ impl fmt::Display for UserInfoLn {
             'num_active_channels': '{}'
             'num_inactive_channels': '{}'
             'num_peers': '{}'
-        )"#, self.version, self.commit_hash, self.identity_pubkey, self.alias, self.num_pending_channels, self.num_active_channels, self.num_inactive_channels, self.num_peers);
+        )"#, self.commit_hash, self.identity_pubkey, self.alias, self.num_pending_channels, self.num_active_channels, self.num_inactive_channels, self.num_peers);
     }
 }
 
@@ -120,20 +118,20 @@ pub async fn get_command_node(client: &ClientWrapper, ln_info: ChannelMessage, c
 
     info!("Status: {}", res.status());
 
-        match res.status() {
-            StatusCode::OK => {
-                handle_success_request(res,ln_info, &command, send_tel.clone())
-                            .await
-                            .unwrap();
-            }
-            StatusCode::CONTINUE | StatusCode::BAD_REQUEST=> {
-                handle_request_err(res,ln_info, &command, send_tel.clone())
-                            .await
-                            .unwrap();
-            }
-        status => info!("status: {}", status),
+    match res.status() {
+        StatusCode::OK => {
+            handle_success_request(res,ln_info, &command, send_tel.clone())
+                        .await
+                        .unwrap();
         }
-     Ok(())
+        StatusCode::CONTINUE | StatusCode::BAD_REQUEST=> {
+           handle_request_err(res,ln_info, &command, send_tel.clone())
+                        .await
+                        .unwrap();
+          }
+        status => info!("status: {}", status),
+    }
+    Ok(())
 }
 
 fn build_headers(macaroon: &str) -> HeaderMap {
@@ -154,11 +152,13 @@ fn build_headers(macaroon: &str) -> HeaderMap {
 async fn handle_success_request(res: reqwest::Response, ln_info:ChannelMessage, command:&str, send_tel:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
     let text = res.text().await?;
     info!("{}",text);
-
+    info!("{}",ln_info.command);
+    if ln_info.command != "status" {
+        return Ok(());
+    }
     let ln_response: LnGetInfo = serde_json::from_str(&text)
                                             .unwrap();
     let to_send = UserInfoLn {
-        version: ln_response.version, 
         commit_hash: ln_response.commit_hash, 
         identity_pubkey: ln_response.identity_pubkey, 
         alias: ln_response.alias, 

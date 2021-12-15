@@ -25,4 +25,5 @@ How to get data needed to register with the bot:
 
 
 TODO:
-- would like to show if node is up or down & what channels are active when checking
+- Make sure threads are actually being turned off when user requests service to end
+- Would like to show if node is up or down & what channels are active when checking
