@@ -58,13 +58,14 @@ async fn get_message(client: &ClientWrapper, settings: &Settings, send_ln:Sender
     let base_url = build_full_base(settings);
 
     let command_url;
+
     if LAST_UPDATE.load(Ordering::SeqCst) > 0 {
-        command_url = format!("/getUpdates?offset={}&allowed_updates=[\"message\",\"callback_query\"]", LAST_UPDATE.load(Ordering::SeqCst));
+        command_url = format!("/getUpdates?offset={}&allowed_updates=[\"message\",\"callback_query\"]", LAST_UPDATE.load(Ordering::SeqCst)+1);
     }
     else{
         command_url = "/getUpdates?allowed_updates=[\"message\",\"callback_query\"]".to_string();
     }
-
+    println!("command_url: {}",command_url);
     let res = client.client
         .get(build_url(base_url, &command_url))
         .headers(build_headers())
@@ -101,7 +102,12 @@ async fn get_message(client: &ClientWrapper, settings: &Settings, send_ln:Sender
 
     update_ids.sort_by_key(|update_id| Reverse(*update_id));
 
+    if update_ids.len() == 0 {
+       return Ok(());
+    }
+
     let last_message_time = update_ids[0];
+    println!("last message time: {}", last_message_time);
 
     if last_message_time > LAST_UPDATE.load(Ordering::SeqCst){
         set_update(last_message_time).unwrap();
@@ -164,28 +170,29 @@ fn info_messages(action: String) -> (String,String) {
     match action.as_str() {
         "/start" => {
             return ("start".to_string(),r#"Signup by sending:
-                        1) tor address of your lighting node,
-                        2) macaroon with the permissions to /getInfo endpoint
-                    Reply to this message with a tuple (<lightning REST API tor address>,<macaroon>), ex:
-                            (https://<wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion>:8080,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY)
-                    NOTE: Please look at this bot's README for details on obtaining these values,
-                     & other instructions on setup, if these values are new to you. The bot's README
-                     can be found here: https://github.com/tee8z/llightning-sentinel/blob/main/README.md"#.to_string())
+1) Tor address of your lighting node,
+2) Macaroon with the permissions to /getInfo endpoint
+    
+Reply to this message with a tuple, ex:
+    (<lightning REST API tor address>,<macaroon>)
+ 
+NOTE: Please look at this bot's README for details on obtaining these values, & other instructions on setup, if these values are new to you. The bot's README can be found here: https://github.com/tee8z/llightning-sentinel/blob/main/README.md"#.to_string())
         },
         "/help" => {
             return ("help".to_string(),r#"
-                To use this bot please use one of the following commands
-                    - /start => register lightning node with it's onion address for it's REST api and macaroon
-                    - /status => once registered, call to see current status of node and channels
-                    - /stop => delete registered node from bot, all data will be removed and watcher stopped
-                    - /help => see list of commands for this bot
+To use this bot please use one of the following commands:
+    
+- /start - register node & start sentinel watching process
+- /help - list of commands
+- /status - status of registered node
+- /stop - deregister node sentinel and delete data
             "#.to_string());
         }
         "/status" => {
             return ("status".to_string(),r#"Status of your node:
-                        Active: {}
-                        Channels: 
-                            {}
+Active: {}
+Channels: 
+            {}
                        "#.to_string());
         },
         "/stop" => {
@@ -193,10 +200,10 @@ fn info_messages(action: String) -> (String,String) {
         },
         _ => {
             return ("bad".to_string(),r#"Please try one of the available options, your message was not understood:
-                        - /start
-                        - /help
-                        - /status
-                        - /stop"#.to_string());
+- /start - register node
+- /help - list of commands
+- /status - status of registered node
+- /stop - deregister node sentinel and delete data"#.to_string());
 
         }
     }
@@ -204,12 +211,15 @@ fn info_messages(action: String) -> (String,String) {
 
 fn parse_address_token(message: &str) -> (String, String){
     lazy_static! {
-        static ref USER_INFO: Regex = Regex::new(r"https://(\S+)onion:\d{4},\S{258}").unwrap();
+        static ref USER_INFO: Regex = Regex::new(r"(https://(\S+)onion:\d{4}),(\S{258})").unwrap();
     }
+  
     if USER_INFO.is_match(message){
         let found_data = USER_INFO.captures(message).unwrap();
-        let lightning_add = found_data.get(0).map_or("", |m| m.as_str());
-        let macaroon = found_data.get(1).map_or("", |m| m.as_str());
+        let lightning_add = found_data.get(1).map_or("", |m| m.as_str());
+        info!("lightning_add: {}", lightning_add);
+        let macaroon = found_data.get(3).map_or("", |m| m.as_str());
+        info!("macaroon: {}", macaroon);
         return (lightning_add.to_string(), macaroon.to_string());
     }
 
@@ -222,9 +232,9 @@ fn build_message(chat_id:i64, node_url:String, macaroon:String, ln_command:Strin
     let ln_info = ChannelMessage {
         channel_type: ChannelType::LN,
         chat_id:chat_id,
-        node_url:node_url,
+        node_url:node_url.clone(),
         macaroon:macaroon,
-        command:ln_command,
+        command:if node_url.len() > 0 { "status".to_string() } else { ln_command },
         message:"".to_string(),
     };
 

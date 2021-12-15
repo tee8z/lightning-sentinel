@@ -29,12 +29,12 @@ pub fn build_poxy_location(settings: &Settings) -> String {
     let proxy_url = settings.sock_url_local.to_string();
     let proxy_port_str = settings.socks_port_local.to_string();
     let full_proxy = proxy_url.to_string() +":"+ &proxy_port_str;
-    info!("{}", full_proxy);
+    info!("build_poxy_location: {}", full_proxy);
     return full_proxy;
 }   
 
 pub fn build_url(base_url: String, command: &str) -> String{
     let full_url = base_url + command;
-    info!("{}", full_url);
+    info!("build_url: {}", full_url);
     return full_url;
 }

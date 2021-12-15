@@ -1,24 +1,28 @@
 
-To get address and access to node
-1) make sure port forwarding 8080 to raspi on router
-2) raspiblitz:
+How to use:
+1) Use the bot already setup with telegram, start a chat with @t.me/llightning_sentinel and send `\help`
+2) Create a new bot with telegram:
+    - following these instructions to create a new bot with botfather:
+        - https://medium.com/shibinco/create-a-telegram-bot-using-botfather-and-get-the-api-token-900ba00e0f39
+    - Add to Settings.toml:
+        - TELEGRAM_BOT_ID
+        - TELEGRAM_BASE_URL
+    - Kick off this project on a linux machine somewhere (cloud/old machine with different power source) to listen/act on commands sent from telegram/lightning node
+
+
+How to get data needed to register with the bot:
+1) Make sure port forwarding 8080 to raspi on router is setup
+2) Go to Raspiblitz menu after ssh to the machine, then:
     (gives you the address of the REST API over tor)
     > MENU > CONNECT > MOBILE > FULLYNODED_LND > Continue > Console QRcode 
-    - Copy and paste:
-    using TOR --> host wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion port 8080
+    - Address will appear like this below the QR code:
+        - host wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion port 8080
+3) Create macaroon:
+   ` lncli bakemacaroon uri:/lnrpc.Lightning/GetInfo `
+4) Response to the Bot's `\start` command with the tuple `(<lightning_node_tor_address>,<macaroon>)`, 
+    ex:
+        `(https://wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion:8080, XXXXXXXXXXX...)`
 
-    lndconnect://wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXX.onion:8080?macaroon=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY
-
-    NOTE: TOR ADDRESS USED HERE ARE FAKE, Nothing will happen if you try to use them
-
-
- - Create a new bot with telegram
-https://medium.com/shibinco/create-a-telegram-bot-using-botfather-and-get-the-api-token-900ba00e0f39
-
-- Or use the one already created @t.me/llightning_sentinel
 
 TODO:
-- need encrytped file to store key/value of user to tor address for sending notification messages (if the file ever gets taken then there is a mapping between user # and tor address, not terrible but want to make it so that's not possible, some sort of key schema?)
 - would like to show if node is up or down & what channels are active when checking
-- implement long pulling to telegram bot (will get booted if go to prod without it)
-- create structure for channels to be many-to-many telegram - lnd messages per user

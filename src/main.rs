@@ -43,45 +43,40 @@ async fn main() -> Result<()> {
     let telegram_client = telegram_client::setup_client(&SETTINGS);
     let lnd_client = lightning_client::setup_client(&SETTINGS);
 
-    //NOTE: Listens for requests to send to uer's lightning notes based on requests from telegram messages
-    tokio::spawn(async move {
-        match recieve_ln.recv().await {
-            Some(ln_info) =>{ 
-                
-
-                info!("recieve_ln: {}", ln_info);
-                let token = CancellationToken::new();
-                ln_threads.insert(ln_info.chat_id, token);
-                lightning_client::check_hidden_service(&lnd_client,
-                                                        ln_info, 
-                                                        PickleJar::new(Arc::clone(&pickle.db)), 
-                                                        send_tel.clone())
-                                .await;
-            },
-            None => { error!("{}", "The message was never sent"); }
-        };
-    });
+    
     let telegram_client_clone = telegram_client.clone();
 
     //NOTE: Listens for messages to send to telegram based on LN listening thread responses
     tokio::spawn(async move {
         info!("recieve_tel setup");
-        match recieve_tel.recv().await {
-            Some(tel_info) => {
+        while let Some(tel_info) =  recieve_tel.recv().await {
                 info!("recieve_tel: {}", tel_info);
                 let send_message = objects::SendMessage{
                     chat_id: tel_info.chat_id,
                     text: tel_info.message
                 };
                 info!("send_message: {}", send_message);
-                telegram_client::send_message(telegram_client, &SETTINGS, send_message)
+                telegram_client::send_message(telegram_client.clone(), &SETTINGS, send_message)
                                 .await
                                 .unwrap();
-            }
-            None => { error!("{}", "The message was never sent"); }
-        };
+              }
     });
 
+    //NOTE: Listens for requests to send to uer's lightning notes based on requests from telegram messages
+    tokio::spawn(async move {
+        while let Some(ln_info) = recieve_ln.recv().await {
+                info!("recieve_ln: {}", ln_info);
+                let token = CancellationToken::new();
+                let ln_thread_lp = ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads));
+                ln_thread_lp.insert(ln_info.chat_id, token);
+
+                lightning_client::check_hidden_service(&lnd_client,
+                                                        ln_info, 
+                                                        PickleJar::new(Arc::clone(&pickle.db)), 
+                                                        send_tel.clone())
+                                                                .await;
+        }
+    });
     let inital_db = PickleJar::new(Arc::clone(&local_access.db));
     let poll_db = PickleJar::new(Arc::clone(&local_access.db));
 

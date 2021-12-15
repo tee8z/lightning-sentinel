@@ -1,7 +1,8 @@
 use tokio::time::{Instant, Duration, interval_at};
 use crate::channels::{ChannelMessage, ChannelType};
 use crate::config_wrapper::Settings;
-use crate::pickle_jar::{PickleJar};
+use crate::pickle_jar::{PickleJar,Row};
+use crate::objects::LnGetInfo;
 use super::client_wrapper::{ClientWrapper, build_url};
 use tokio::sync::mpsc::{Sender};
 use reqwest::{
@@ -12,7 +13,10 @@ use anyhow::Result;
 use log::{info,error};
 use serde_json;
 use serde::{Serialize, Deserialize};
-use std::fmt;
+use std::{
+    sync::Arc,
+    fmt};
+
 
 #[derive(Serialize, Deserialize)]
 struct UserInfoLn {
@@ -41,47 +45,6 @@ impl fmt::Display for UserInfoLn {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct LnResponse { 
-    pub version: String, 
-    pub commit_hash: String, 
-    pub identity_pubkey: String, 
-    pub alias: String, 
-    color: String, 
-    pub num_pending_channels: i64, 
-    pub num_active_channels: i64, 
-    pub num_inactive_channels: i64, 
-    pub num_peers: i64, 
-    block_height: i64, 
-    block_hash: String, 
-    best_header_timestamp: String, 
-    synced_to_chain: bool, 
-    synced_to_graph: bool, 
-    testnet: bool, 
-    chains: Vec<LnrpcChain>, 
-    uris: Vec<String>, 
-    features: Vec<FeaturesEntry>
-}
-
-#[derive(Serialize, Deserialize)]
-struct LnrpcChain {
-    chain: String,
-    network: String
-}
-
-#[derive(Serialize, Deserialize)]
-struct FeaturesEntry {
-    key: u32,
-    value: Feature,
-}
-
-#[derive(Serialize, Deserialize)]
-struct Feature {
-    name: String,
-    is_required: bool,
-    is_known: bool
-}
-
 pub fn setup_client(settings: &Settings) -> ClientWrapper {
     let client = ClientWrapper::new(settings);
     return client;
@@ -91,7 +54,7 @@ pub fn setup_client(settings: &Settings) -> ClientWrapper {
 pub async fn check_hidden_service(client: &ClientWrapper, ln_info: ChannelMessage, pickle: PickleJar, send_tel:Sender<ChannelMessage>) {
     let command = "/v1/getinfo";
     
-    let resolved_data = handle_check_service(ln_info.clone(), pickle.clone()).await;
+    let resolved_data = handle_check_service(ln_info.clone(),  PickleJar::new(Arc::clone(&pickle.db))).await;
     let start = Instant::now() + Duration::from_secs(20);
     let mut interval = interval_at(start, Duration::from_secs(30));
    
@@ -99,23 +62,33 @@ pub async fn check_hidden_service(client: &ClientWrapper, ln_info: ChannelMessag
         interval.tick().await;
         let url = &resolved_data.0;
         let macaroon = &resolved_data.1;
-        match get_command_node(&client, ln_info.clone(), url.to_string(), macaroon.to_string(), send_tel.clone(), command.to_string()).await
-        {
-            _ => { return; }
-        }
-
+        match get_command_node(&client, ln_info.clone(), url.to_string(), macaroon.to_string(), send_tel.clone(), command.to_string())
+            .await {
+                Ok(_) => { }
+                Err(e) => { error!("{}", e); }
+            }
     }
 
 }
 
 pub async fn handle_check_service(ln_info: ChannelMessage, pickle: PickleJar) -> (String, String) {
 
-    let row = pickle.get(&ln_info.chat_id)
+    let mut row =  PickleJar::new(Arc::clone(&pickle.db))
+                        .get(&ln_info.chat_id)
                         .await;
 
-    if row.is_watching {
-        return ("".to_string(), "".to_string());
+    if row.node_url.len() == 0 {
+        row = Row{
+            telegram_chat_id: ln_info.chat_id.clone(),
+            node_url: ln_info.node_url.clone(),
+            is_watching: true,
+            macaroon: ln_info.macaroon.clone(),
+        };
+        PickleJar::new(Arc::clone(&pickle.db))
+        .add(&ln_info.chat_id.to_string(), row.clone())
+              .await;
     }
+
     let mut node_url = row.node_url;
 
     if node_url.len() == 0 {
@@ -132,14 +105,16 @@ pub async fn handle_check_service(ln_info: ChannelMessage, pickle: PickleJar) ->
 
 
 //TODO: Clean response from node to be clear/simple to end user
-pub async fn get_command_node<'a>(client: &ClientWrapper, ln_info: ChannelMessage, check_url:String, macaroon:String, send_tel:Sender<ChannelMessage>, command:String)-> Result<(), reqwest::Error> {
+pub async fn get_command_node(client: &ClientWrapper, ln_info: ChannelMessage, check_url:String, macaroon:String, send_tel:Sender<ChannelMessage>, command:String)-> Result<(), reqwest::Error> {
     
     let url = build_url(check_url, &command);
-    info!("{0}", url);
+    info!("get_command_node: {0}", url);
+    info!("get_command_node: {0}", macaroon);
+    let headers = build_headers(&macaroon);
     let res = client
                 .client
                 .get(url)
-                .headers(build_headers(&macaroon))
+                .headers(headers)
                 .send()
                 .await?;
 
@@ -151,7 +126,7 @@ pub async fn get_command_node<'a>(client: &ClientWrapper, ln_info: ChannelMessag
                             .await
                             .unwrap();
             }
-            StatusCode::CONTINUE => {
+            StatusCode::CONTINUE | StatusCode::BAD_REQUEST=> {
                 handle_request_err(res,ln_info, &command, send_tel.clone())
                             .await
                             .unwrap();
@@ -164,7 +139,10 @@ pub async fn get_command_node<'a>(client: &ClientWrapper, ln_info: ChannelMessag
 fn build_headers(macaroon: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
     let header_val = HeaderValue::from_str(macaroon).unwrap();
+    info!("{}", macaroon);
     headers.insert("Grpc-Metadata-macaroon",header_val);
+    let header_val = HeaderValue::from_str(&"application/json").unwrap();
+    headers.insert("Content-Type",header_val);
     return headers;
 }
 
@@ -175,7 +153,9 @@ fn build_headers(macaroon: &str) -> HeaderMap {
 // - Regular pin, everything up/fine, not requested by user
 async fn handle_success_request(res: reqwest::Response, ln_info:ChannelMessage, command:&str, send_tel:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
     let text = res.text().await?;
-    let ln_response: LnResponse = serde_json::from_str(&text)
+    info!("{}",text);
+
+    let ln_response: LnGetInfo = serde_json::from_str(&text)
                                             .unwrap();
     let to_send = UserInfoLn {
         version: ln_response.version, 
@@ -210,7 +190,7 @@ async fn handle_request_err(res: reqwest::Response, ln_info:ChannelMessage, comm
     let tel_message = ChannelMessage {
         channel_type: ChannelType::TEL,
         command:command.to_string(),
-        message:text,
+        message: text,
         node_url: "".to_string(),
         chat_id:ln_info.chat_id,
         macaroon:"".to_string()
