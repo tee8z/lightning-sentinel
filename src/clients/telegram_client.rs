@@ -1,4 +1,4 @@
-use crate::channels::{ChannelMessage, ChannelType, ThreadsMap};
+use crate::channels::{ChannelMessage, ChannelType};
 use crate::objects::{SendMessage, Update};
 use crate::config_wrapper::Settings;
 use crate::pickle_jar::{PickleJar, Row};
@@ -29,14 +29,15 @@ fn build_headers() -> HeaderMap{
     return headers;
 }
 
-pub async fn poll_messages(client: ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>, pickle:PickleJar, ln_threads:ThreadsMap) -> Result<(), reqwest::Error>{
+pub async fn poll_messages(client: ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>, pickle:PickleJar) -> Result<(), reqwest::Error>{
     let start = Instant::now() + Duration::from_secs(20);
     let mut interval = interval_at(start, Duration::from_secs(20));
     loop {
         interval.tick().await;
         get_message(&client, settings, send_ln.clone(),
-        PickleJar::new(Arc::clone(&pickle.db)), 
-        ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads))).await?;
+                    PickleJar::new(Arc::clone(&pickle.db)))
+                    .await
+                    .unwrap();
     }
 }
 #[derive(Serialize, Deserialize, Debug)]
@@ -54,7 +55,7 @@ fn set_update(update_id: u32) -> Result<u32, u32>{
 }
 
 
-async fn get_message(client: &ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>,pickle:PickleJar, ln_threads:ThreadsMap) -> Result<(), reqwest::Error>{
+async fn get_message(client: &ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>,pickle:PickleJar) -> Result<(), reqwest::Error>{
     let base_url = build_full_base(settings);
 
     let command_url;
@@ -65,7 +66,7 @@ async fn get_message(client: &ClientWrapper, settings: &Settings, send_ln:Sender
     else{
         command_url = "/getUpdates?allowed_updates=[\"message\",\"callback_query\"]".to_string();
     }
-    println!("command_url: {}",command_url);
+    info!("command_url: {}",command_url);
     let res = client.client
         .get(build_url(base_url, &command_url))
         .headers(build_headers())
@@ -95,7 +96,6 @@ async fn get_message(client: &ClientWrapper, settings: &Settings, send_ln:Sender
                             .unwrap(),
                     settings,
                     PickleJar::new(Arc::clone(&pickle.db)), 
-                    ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads)),
                     send_ln.clone())
                     .await;
     };
@@ -121,7 +121,6 @@ async fn handle_message(client: ClientWrapper,
                         message: String, 
                         settings:&Settings, 
                         pickle:PickleJar,
-                        ln_threads:ThreadsMap, 
                         send_ln:Sender<ChannelMessage>) {
     let address_mac = parse_address_token(&message);
     let parse = info_messages(message);
@@ -148,8 +147,11 @@ async fn handle_message(client: ClientWrapper,
     }
     else if parse_cl.0 == "help" || parse_cl.0 == "start" || parse_cl.0 == "bad" || parse.0.clone() == "stop" {
         if parse.0.clone() == "stop"{
-            ln_threads.cancel(chat_id);
-            pickle.remove(&chat_id.to_string())
+            let pickle_cp = PickleJar::new(Arc::clone(&pickle.db));
+            let mut saved = pickle.get(&chat_id)
+                  .await;
+            saved.is_watching = false;
+            pickle_cp.set(&chat_id.to_string(), saved)
                   .await;
         }
         let message = SendMessage {

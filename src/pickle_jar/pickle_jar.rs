@@ -100,13 +100,13 @@ impl PickleJar {
             }
     }
 
-    pub async fn remove(self, telegram_user_id: &str) -> bool {
+    pub async fn remove(self, telegram_user_id: &i64) -> bool {
         let mut guard = self.db.lock()
                             .await;
         
         let unlock_db = &mut *guard;
 
-        match unlock_db.rem(telegram_user_id) {
+        match unlock_db.rem(&telegram_user_id.to_string()) {
             Ok(v) => {
                 if v {
                     info!("{} has been successfully removed", telegram_user_id);

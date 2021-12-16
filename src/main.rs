@@ -12,13 +12,13 @@ mod pickle_jar;
 mod channels;
 mod config_wrapper;
 
-use channels::{Messages, ChannelMessage, ChannelType, ThreadsMap};
+use channels::{Messages, ChannelMessage, ChannelType};
 use clients::telegram_client;
 use clients::lightning_client;
 use config_wrapper::SETTINGS;
 use tor_proxy::tor_proxy::tor;
 use pickle_jar::PickleJar;
-use tokio_util::sync::CancellationToken;
+
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -28,9 +28,6 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         tor(config_wrapper::SETTINGS.socks_port_local);
     });
-
-    let ln_threads = ThreadsMap::init();
-    let ln_thread_cp = ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads));
 
     let pickle = PickleJar::init();
     let local_access = PickleJar::new(Arc::clone(&pickle.db));
@@ -65,20 +62,12 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         while let Some(ln_info) = recieve_ln.recv().await {
                 info!("recieve_ln: {}", ln_info);
-                let ln_thread_lp_base = ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads));
                 let lnd_client_cl = lnd_client.clone();
                 let picklejar_cp = PickleJar::new(Arc::clone(&pickle.db));
                 let send_tel_cl = send_tel.clone();
 
                 //NOTE: creates new thread to poll a user's ln node
                 tokio::spawn(async move {
-                    let token = CancellationToken::new();
-                    let ln_thread_lp = ThreadsMap::new(Arc::clone(&ln_thread_lp_base.ln_calling_threads));
-                    let ln_thread_lp2 = ThreadsMap::new(Arc::clone(&ln_thread_lp_base.ln_calling_threads));
-
-                    ln_thread_lp.cancel(ln_info.chat_id);
-                    ln_thread_lp2.insert(ln_info.chat_id, token);
-                    info!("recieve_ln: {}", ln_info);
                     lightning_client::check_hidden_service(&lnd_client_cl,
                                                             ln_info, 
                                                             PickleJar::new(Arc::clone(&picklejar_cp.db)), 
@@ -117,8 +106,7 @@ async fn main() -> Result<()> {
     telegram_client::poll_messages(telegram_client_clone, 
                                     &*SETTINGS, 
                                     send_lnd_cp.clone(), 
-                                    PickleJar::new(Arc::clone(&poll_db.db)),
-                                    ThreadsMap::new(Arc::clone(&ln_thread_cp.ln_calling_threads)))
+                                    PickleJar::new(Arc::clone(&poll_db.db)))
                     .await?;
 
     Ok(())

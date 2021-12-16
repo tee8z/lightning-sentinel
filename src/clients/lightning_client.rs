@@ -57,6 +57,22 @@ pub async fn check_hidden_service(client: &ClientWrapper, ln_info: ChannelMessag
     info!("{}", ln_info.command.clone());
     let mut send_status = if ln_info.command.len() == 0  { false } else { true };
     loop {
+        let pickle_get = PickleJar::new(Arc::clone(&pickle.db));
+        let pickle_remove = PickleJar::new(Arc::clone(&pickle.db));
+        let row = pickle_get.get(&ln_info
+            .clone()
+            .chat_id)
+            .await;
+
+        //Stops watching this node
+        if row.is_watching == false {
+            pickle_remove.remove(&ln_info
+                .clone()
+                .chat_id)
+                .await;
+            break;
+        }
+
         interval.tick().await;
         let url = &resolved_data.0;
         let macaroon = &resolved_data.1;
@@ -68,8 +84,6 @@ pub async fn check_hidden_service(client: &ClientWrapper, ln_info: ChannelMessag
                 Err(e) => { error!("{}", e); }
             }
         send_status = false;
-        //IF stop called
-        //break;
     }
 
 }
@@ -91,7 +105,7 @@ pub async fn handle_check_service(ln_info: ChannelMessage, pickle: PickleJar) ->
                 .set(&ln_info.chat_id.to_string(), row.clone())
                 .await;
     }
-    
+
     return (row.node_url, row.macaroon);   
     
 }
