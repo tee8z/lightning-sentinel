@@ -1,4 +1,4 @@
-use tokio::time::{Instant, Duration, interval_at};
+use tokio::time::{Duration, interval};
 use crate::channels::{ChannelMessage, ChannelType};
 use crate::config_wrapper::Settings;
 use crate::pickle_jar::{PickleJar,Row};
@@ -51,20 +51,25 @@ pub fn setup_client(settings: &Settings) -> ClientWrapper {
 // Polling lightning node done here
 pub async fn check_hidden_service(client: &ClientWrapper, ln_info: ChannelMessage, pickle: PickleJar, send_tel:Sender<ChannelMessage>) {
     let command = "/v1/getinfo";
-    
+
     let resolved_data = handle_check_service(ln_info.clone(),  PickleJar::new(Arc::clone(&pickle.db))).await;
-    let start = Instant::now() + Duration::from_secs(20);
-    let mut interval = interval_at(start, Duration::from_secs(30));
-   
+    let mut interval = interval(Duration::from_secs(30));
+    info!("{}", ln_info.command.clone());
+    let mut send_status = if ln_info.command.len() == 0  { false } else { true };
     loop {
         interval.tick().await;
         let url = &resolved_data.0;
         let macaroon = &resolved_data.1;
-        match get_command_node(&client, ln_info.clone(), url.to_string(), macaroon.to_string(), send_tel.clone(), command.to_string())
+        match get_command_node(&client, ln_info.clone(), url.to_string(), macaroon.to_string(), send_tel.clone(), command.to_string(), send_status)
             .await {
-                Ok(_) => { }
+                Ok(_) => { 
+                    info!("OK"); 
+                }
                 Err(e) => { error!("{}", e); }
             }
+        send_status = false;
+        //IF stop called
+        //break;
     }
 
 }
@@ -74,7 +79,7 @@ pub async fn handle_check_service(ln_info: ChannelMessage, pickle: PickleJar) ->
     let mut row =  PickleJar::new(Arc::clone(&pickle.db))
                         .get(&ln_info.chat_id)
                         .await;
-
+    info!("Found row:{}", row);
     if row.node_url.len() == 0 {
         row = Row{
             telegram_chat_id: ln_info.chat_id.clone(),
@@ -83,27 +88,17 @@ pub async fn handle_check_service(ln_info: ChannelMessage, pickle: PickleJar) ->
             macaroon: ln_info.macaroon.clone(),
         };
         PickleJar::new(Arc::clone(&pickle.db))
-        .add(&ln_info.chat_id.to_string(), row.clone())
-              .await;
-    }
-
-    let mut node_url = row.node_url;
-
-    if node_url.len() == 0 {
-        node_url = ln_info.node_url;
-    }
-
-    let mut macaroon = row.macaroon;
-    if macaroon.len() == 1 {
-        macaroon = ln_info.macaroon;
+                .set(&ln_info.chat_id.to_string(), row.clone())
+                .await;
     }
     
-    return (node_url, macaroon);
+    return (row.node_url, row.macaroon);   
+    
 }
 
 
 //TODO: Clean response from node to be clear/simple to end user
-pub async fn get_command_node(client: &ClientWrapper, ln_info: ChannelMessage, check_url:String, macaroon:String, send_tel:Sender<ChannelMessage>, command:String)-> Result<(), reqwest::Error> {
+pub async fn get_command_node(client: &ClientWrapper, ln_info: ChannelMessage, check_url:String, macaroon:String, send_tel:Sender<ChannelMessage>, command:String, send_status:bool)-> Result<(), reqwest::Error> {
     
     let url = build_url(check_url, &command);
     info!("get_command_node: {0}", url);
@@ -120,16 +115,19 @@ pub async fn get_command_node(client: &ClientWrapper, ln_info: ChannelMessage, c
 
     match res.status() {
         StatusCode::OK => {
+            if !send_status {
+                return Ok(())
+            }
+            
             handle_success_request(res,ln_info, &command, send_tel.clone())
+                    .await
+                    .unwrap();
+            
+        },
+        _ => { handle_request_err(res,ln_info, &command, send_tel.clone())
                         .await
                         .unwrap();
         }
-        StatusCode::CONTINUE | StatusCode::BAD_REQUEST=> {
-           handle_request_err(res,ln_info, &command, send_tel.clone())
-                        .await
-                        .unwrap();
-          }
-        status => info!("status: {}", status),
     }
     Ok(())
 }
@@ -144,11 +142,7 @@ fn build_headers(macaroon: &str) -> HeaderMap {
     return headers;
 }
 
-//TODO: SHOULD send response to telegram channel if:
-//  1) message was requested by the user
-//  2) there was an error (ie lightning node is down or some channels are inactive)
-//SHOULD not send response to telegram if:
-// - Regular pin, everything up/fine, not requested by user
+
 async fn handle_success_request(res: reqwest::Response, ln_info:ChannelMessage, command:&str, send_tel:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
     let text = res.text().await?;
     info!("{}",text);

@@ -31,7 +31,7 @@ fn build_headers() -> HeaderMap{
 
 pub async fn poll_messages(client: ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>, pickle:PickleJar, ln_threads:ThreadsMap) -> Result<(), reqwest::Error>{
     let start = Instant::now() + Duration::from_secs(20);
-    let mut interval = interval_at(start, Duration::from_secs(60));
+    let mut interval = interval_at(start, Duration::from_secs(20));
     loop {
         interval.tick().await;
         get_message(&client, settings, send_ln.clone(),
@@ -136,7 +136,7 @@ async fn handle_message(client: ClientWrapper,
                 macaroon: address_mac.1.clone(),
                 is_watching: true,
             };
-            pickle.add(&chat_id.to_string(), row)
+            pickle.set(&chat_id.to_string(), row)
                   .await;
         }
 
@@ -234,7 +234,7 @@ fn build_message(chat_id:i64, node_url:String, macaroon:String, ln_command:Strin
         chat_id:chat_id,
         node_url:node_url.clone(),
         macaroon:macaroon,
-        command:if node_url.len() > 0 { "status".to_string() } else { ln_command },
+        command: if node_url.len() > 0 { "status".to_string() } else { ln_command },
         message:"".to_string(),
     };
 

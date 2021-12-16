@@ -8,7 +8,7 @@ use std::{
     fmt,
     sync::{Arc, Mutex},
     collections::HashMap};
-
+use log::{info};
 
 // NOTE: Chat_id will be unique for each user connecting to the bot
 // https://stackoverflow.com/questions/59748008/telegram-bot-api-is-the-chat-id-unique-for-each-user-contacting-the-bot
@@ -82,40 +82,56 @@ impl Messages {
 
 
 pub struct ThreadsMap {
-    pub ln_calling_threads: Arc<Mutex<HashMap<i64, Vec<CancellationToken>>>>
+    pub ln_calling_threads: Arc<Mutex<HashMap<i64, CancellationToken>>>
 }
 
 impl ThreadsMap {
     pub fn init() -> Self { 
         Self { ln_calling_threads:  Arc::new(Mutex::new(HashMap::new())) }
     }
-    pub fn new(ln_calling_threads:Arc<Mutex<HashMap<i64, Vec<CancellationToken>>>>) -> ThreadsMap {
+    pub fn new(ln_calling_threads:Arc<Mutex<HashMap<i64, CancellationToken>>>) -> ThreadsMap {
         Self { ln_calling_threads: ln_calling_threads}
     }
-    pub fn get(self, key:i64) -> &'static Vec<CancellationToken>{
-        match self.ln_calling_threads
-                .lock()
-                .unwrap()
-                .get(&key) {
-                    Some(cancel_tokens) => { return  cancel_tokens; }
-                    None => { return vec![]; }
+
+    pub fn insert(self, key:i64, new_cancel_token: CancellationToken){
+        let mut unlocked = self.ln_calling_threads
+                            .lock()
+                            .unwrap();
+
+            match unlocked
+                        .get(&key) {
+                Some(cancel_tokens) => { 
+                    info!("Some");
+                    cancel_tokens
+                        .cancel(); 
+                    
+                    match unlocked
+                        .insert(key, new_cancel_token){
+                            Some(_) => { 
+
+                            },
+                            None => { }
+                        }
+                },
+                None => {
+                    info!("none");
+                    match unlocked
+                        .insert(key, new_cancel_token) {
+                            Some(_) => { 
+                                
+                            },
+                            None => { }
+                        }
                 }
-    }
-    pub fn insert(self, key:i64, cancel_token: Vec<CancellationToken>){
-            self.ln_calling_threads
-                .lock()
-                .unwrap()
-                .insert(key, cancel_token);
+        }
     }
     pub fn cancel(self, key:i64){
         match self.ln_calling_threads
             .lock()
             .unwrap()
             .get(&key) {
-                Some(cancel_tokens) => { 
-                    for cancel_token in cancel_tokens {
+                Some(cancel_token) => { 
                         cancel_token.cancel(); 
-                    } 
                 }
                 None => {}
             }

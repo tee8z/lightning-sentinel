@@ -20,7 +20,8 @@ impl Default for Settings {
             sock_url_local: "socks5h://127.0.0.1".to_string(),
             socks_port_local: 9056,
             telegram_bot_id: "".to_string(),
-            telegram_base_url: "".to_string()
+            telegram_base_url: "".to_string(),
+
         }
     }
 }

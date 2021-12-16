@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{fmt,
-          collections::HashMap};
+use std::{collections::HashMap};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LnGetInfo {

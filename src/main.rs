@@ -28,9 +28,9 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         tor(config_wrapper::SETTINGS.socks_port_local);
     });
+
     let ln_threads = ThreadsMap::init();
     let ln_thread_cp = ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads));
-    let ln_thread_cp2 = ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads));
 
     let pickle = PickleJar::init();
     let local_access = PickleJar::new(Arc::clone(&pickle.db));
@@ -38,7 +38,6 @@ async fn main() -> Result<()> {
     let channels = Messages::new();
     let (send_lnd, mut recieve_ln) = channels.lightning_messages;
     let (send_tel, mut recieve_tel) = channels.telegram_messages;
-    let send_tel_cl = send_tel.clone();
 
     let telegram_client = telegram_client::setup_client(&SETTINGS);
     let lnd_client = lightning_client::setup_client(&SETTINGS);
@@ -46,7 +45,7 @@ async fn main() -> Result<()> {
     
     let telegram_client_clone = telegram_client.clone();
 
-    //NOTE: Listens for messages to send to telegram based on LN listening thread responses
+    //NOTE: Listens for messages to send to telegram based on LN listening thread's responses
     tokio::spawn(async move {
         info!("recieve_tel setup");
         while let Some(tel_info) =  recieve_tel.recv().await {
@@ -66,30 +65,37 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         while let Some(ln_info) = recieve_ln.recv().await {
                 info!("recieve_ln: {}", ln_info);
-                let token = CancellationToken::new();
-                let ln_thread_lp = ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads));
-                let ln_thread_lp_cp = ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads));
-                let mut tokens = ln_thread_lp.get(ln_info.chat_id.clone());
-                tokens.push(token);
-                ln_thread_lp_cp.insert(ln_info.chat_id, *tokens);
+                let ln_thread_lp_base = ThreadsMap::new(Arc::clone(&ln_threads.ln_calling_threads));
+                let lnd_client_cl = lnd_client.clone();
+                let picklejar_cp = PickleJar::new(Arc::clone(&pickle.db));
+                let send_tel_cl = send_tel.clone();
 
-                lightning_client::check_hidden_service(&lnd_client,
-                                                        ln_info, 
-                                                        PickleJar::new(Arc::clone(&pickle.db)), 
-                                                        send_tel.clone())
-                                                                .await;
+                //NOTE: creates new thread to poll a user's ln node
+                tokio::spawn(async move {
+                    let token = CancellationToken::new();
+                    let ln_thread_lp = ThreadsMap::new(Arc::clone(&ln_thread_lp_base.ln_calling_threads));
+                    let ln_thread_lp2 = ThreadsMap::new(Arc::clone(&ln_thread_lp_base.ln_calling_threads));
+
+                    ln_thread_lp.cancel(ln_info.chat_id);
+                    ln_thread_lp2.insert(ln_info.chat_id, token);
+                    info!("recieve_ln: {}", ln_info);
+                    lightning_client::check_hidden_service(&lnd_client_cl,
+                                                            ln_info, 
+                                                            PickleJar::new(Arc::clone(&picklejar_cp.db)), 
+                                                            send_tel_cl.clone())
+                                                                    .await;
+                });
         }
     });
-    let inital_db = PickleJar::new(Arc::clone(&local_access.db));
     let poll_db = PickleJar::new(Arc::clone(&local_access.db));
 
-    let initial_user = local_access.get_values().await;
+    let initial_user = local_access.get_values()
+                                .await;
 
-    let lnd_client_initial = lightning_client::setup_client(&SETTINGS);
-    
+    let send_lnd_cp = send_lnd.clone();
+
     //NOTE: Sets up initial threads of already registered users
     if initial_user.len() > 0 {
-        tokio::spawn(async move {
             for user in initial_user {
                 let ln_info = ChannelMessage {
                     channel_type: ChannelType::LN,
@@ -99,27 +105,20 @@ async fn main() -> Result<()> {
                     message: "".to_string(),
                     macaroon: user.macaroon
                 };
-                let ln_thread_lp = ThreadsMap::new(Arc::clone(&ln_thread_cp.ln_calling_threads));
-                let ln_thread_lp_cp = ThreadsMap::new(Arc::clone(&ln_thread_cp.ln_calling_threads));
-                let mut tokens = ln_thread_lp.get(ln_info.chat_id.clone());
-                let token = CancellationToken::new();
-                tokens.push(token);
-                ln_thread_lp_cp.insert(ln_info.chat_id, *tokens);
 
-                lightning_client::check_hidden_service(&lnd_client_initial.clone(),
-                    ln_info, 
-                    PickleJar::new(Arc::clone(&inital_db.db)), 
-                    send_tel_cl.clone()).await
+                send_lnd.clone()
+                        .send(ln_info)
+                        .await
+                        .unwrap();
             }
-        });
     }
 
-    //NOTE: Should be one task polling the telegram bot for new messages
+    //NOTE: Makes one task to poll the telegram bot for new messages
     telegram_client::poll_messages(telegram_client_clone, 
                                     &*SETTINGS, 
-                                    send_lnd.clone(), 
+                                    send_lnd_cp.clone(), 
                                     PickleJar::new(Arc::clone(&poll_db.db)),
-                                    ThreadsMap::new(Arc::clone(&ln_thread_cp2.ln_calling_threads)))
+                                    ThreadsMap::new(Arc::clone(&ln_thread_cp.ln_calling_threads)))
                     .await?;
 
     Ok(())

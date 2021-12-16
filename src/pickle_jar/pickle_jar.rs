@@ -46,21 +46,22 @@ pub struct PickleJar {
 impl PickleJar {
     pub fn init() -> Self {
         let path = build_path_to_pickle();
-        let db_mutex;
+        info!("path: {}", path);
+        let pickle;
         if !Path::new(&path[0..path.len()]).is_file() {
-            db_mutex = Mutex::new(PickleDb::load(
+            pickle = PickleDb::new(
                 path,
                 PickleDbDumpPolicy::AutoDump,
                 SerializationMethod::Cbor,
-            ).unwrap());
+            );
         } else {
-            db_mutex = Mutex::new(PickleDb::load(
+            pickle = PickleDb::load(
                 path,
                 PickleDbDumpPolicy::AutoDump,
                 SerializationMethod::Cbor,
-            ).unwrap());
+            ).unwrap();
         }
-        Self { db: Arc::new(db_mutex) }
+        Self { db: Arc::new(Mutex::new(pickle)) }
     }
     
     pub fn new(clone_db: Arc<Mutex<PickleDb>>) -> Self {
@@ -74,7 +75,7 @@ impl PickleJar {
  
         match unlock_db.get::<Row>(&telegram_user_id.to_string()) {
             Some(value) => {
-                info!("{}'s amount is {}", telegram_user_id, value);
+                info!("Row: {}", value);
                return value;
             }
             None => {
@@ -84,13 +85,19 @@ impl PickleJar {
          }
     }
      
-    pub async fn add(self, telegram_client_id: &str, row: Row) {
+    pub async fn set(self,telegram_client_id: &str, row: Row) {
         let mut guard = self.db.lock()
                                .await;
     
         let unlock_db = &mut *guard;
-        
-        unlock_db.ladd(telegram_client_id, &row);
+        info!("{}", telegram_client_id);
+        info!("{}", row);
+        match unlock_db.set(&telegram_client_id, &row) {
+                Ok(_) => {
+                      info!("set successfully");
+                }
+                Err(e) => {error!("{}", e);}
+            }
     }
 
     pub async fn remove(self, telegram_user_id: &str) -> bool {
