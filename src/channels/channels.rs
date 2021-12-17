@@ -4,7 +4,7 @@ use tokio::{
 };
 
 use std::fmt;
-use log::info;
+
 
 // NOTE: Chat_id will be unique for each user connecting to the bot
 // https://stackoverflow.com/questions/59748008/telegram-bot-api-is-the-chat-id-unique-for-each-user-contacting-the-bot

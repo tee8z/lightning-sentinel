@@ -46,7 +46,7 @@ pub struct PickleJar {
 impl PickleJar {
     pub fn init() -> Self {
         let path = build_path_to_pickle();
-        info!("path: {}", path);
+        info!("(init) path: {}", path);
         let pickle;
         if !Path::new(&path[0..path.len()]).is_file() {
             pickle = PickleDb::new(
@@ -75,11 +75,9 @@ impl PickleJar {
  
         match unlock_db.get::<Row>(&telegram_user_id.to_string()) {
             Some(value) => {
-                info!("Row: {}", value);
                return value;
             }
             None => {
-                info!("No entry found");
                 return Row::default();
             }
          }
@@ -90,13 +88,9 @@ impl PickleJar {
                                .await;
     
         let unlock_db = &mut *guard;
-        info!("{}", telegram_client_id);
-        info!("{}", row);
         match unlock_db.set(&telegram_client_id, &row) {
-                Ok(_) => {
-                      info!("set successfully");
-                }
-                Err(e) => {error!("{}", e);}
+                Ok(_) => { }
+                Err(e) => {error!("(set) {}", e);}
             }
     }
 
@@ -109,15 +103,13 @@ impl PickleJar {
         match unlock_db.rem(&telegram_user_id.to_string()) {
             Ok(v) => {
                 if v {
-                    info!("{} has been successfully removed", telegram_user_id);
                     return true;
                 } else {
-                    info!("Record does not exist");
                     return false;
                 }
             }
             Err(e) => {
-                error!("Error, failed due to: {}", e);
+                error!("(remove) error: {}", e);
                 return false;
             }
         };

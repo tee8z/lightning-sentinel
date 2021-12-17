@@ -53,7 +53,7 @@ pub async fn check_hidden_service(client: &ClientWrapper, ln_info: ChannelMessag
     let command = "/v1/getinfo";
 
     let resolved_data = handle_check_service(ln_info.clone(),  PickleJar::new(Arc::clone(&pickle.db))).await;
-    let mut interval = interval(Duration::from_secs(30));
+    let mut interval = interval(Duration::from_secs(20));
     info!("{}", ln_info.command.clone());
     let mut send_status = if ln_info.command.len() == 0  { false } else { true };
     loop {
@@ -84,6 +84,10 @@ pub async fn check_hidden_service(client: &ClientWrapper, ln_info: ChannelMessag
                 Err(e) => { error!("{}", e); }
             }
         send_status = false;
+        info!("Command: {}",ln_info.command);
+        if ln_info.command == "status" {
+            break;
+        }
     }
 
 }
@@ -93,7 +97,7 @@ pub async fn handle_check_service(ln_info: ChannelMessage, pickle: PickleJar) ->
     let mut row =  PickleJar::new(Arc::clone(&pickle.db))
                         .get(&ln_info.chat_id)
                         .await;
-    info!("Found row:{}", row);
+
     if row.node_url.len() == 0 {
         row = Row{
             telegram_chat_id: ln_info.chat_id.clone(),
@@ -115,8 +119,6 @@ pub async fn handle_check_service(ln_info: ChannelMessage, pickle: PickleJar) ->
 pub async fn get_command_node(client: &ClientWrapper, ln_info: ChannelMessage, check_url:String, macaroon:String, send_tel:Sender<ChannelMessage>, command:String, send_status:bool)-> Result<(), reqwest::Error> {
     
     let url = build_url(check_url, &command);
-    info!("get_command_node: {0}", url);
-    info!("get_command_node: {0}", macaroon);
     let headers = build_headers(&macaroon);
     let res = client
                 .client
@@ -125,7 +127,7 @@ pub async fn get_command_node(client: &ClientWrapper, ln_info: ChannelMessage, c
                 .send()
                 .await?;
 
-    info!("Status: {}", res.status());
+    info!("(get_command_node) Status: {}", res.status());
 
     match res.status() {
         StatusCode::OK => {
@@ -149,7 +151,6 @@ pub async fn get_command_node(client: &ClientWrapper, ln_info: ChannelMessage, c
 fn build_headers(macaroon: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
     let header_val = HeaderValue::from_str(macaroon).unwrap();
-    info!("{}", macaroon);
     headers.insert("Grpc-Metadata-macaroon",header_val);
     let header_val = HeaderValue::from_str(&"application/json").unwrap();
     headers.insert("Content-Type",header_val);
@@ -159,11 +160,6 @@ fn build_headers(macaroon: &str) -> HeaderMap {
 
 async fn handle_success_request(res: reqwest::Response, ln_info:ChannelMessage, command:&str, send_tel:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
     let text = res.text().await?;
-    info!("{}",text);
-    info!("{}",ln_info.command);
-    if ln_info.command != "status" {
-        return Ok(());
-    }
     let ln_response: LnGetInfo = serde_json::from_str(&text)
                                             .unwrap();
     let to_send = UserInfoLn {
@@ -184,10 +180,10 @@ async fn handle_success_request(res: reqwest::Response, ln_info:ChannelMessage, 
         chat_id:ln_info.chat_id,
         macaroon:"".to_string()
     };
-    info!("handle_success_request");
-    info!("{}", tel_message);
+
+    info!("(handle_success_request) tel_message: {}", tel_message);
     if let Err(e) = send_tel.send(tel_message).await {
-        error!("handle_success_request channel send error: {0}", e);
+        error!("(handle_success_request) channel send error: {0}", e);
     }
     Ok(())
 }
@@ -204,9 +200,9 @@ async fn handle_request_err(res: reqwest::Response, ln_info:ChannelMessage, comm
         macaroon:"".to_string()
     };
     info!("handle_request_err");
-    info!("{}", tel_message);
+    info!("(handle_request_err) tel_message: {}", tel_message);
     if let Err(e) = send_tel.send(tel_message).await {
-        error!("handle_request_err channel send error {0}", e);
+        error!("(handle_request_err) channel send error {0}", e);
     }
     Ok(())
 }

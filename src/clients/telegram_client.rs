@@ -4,7 +4,7 @@ use crate::config_wrapper::Settings;
 use crate::pickle_jar::{PickleJar, Row};
 use super::client_wrapper::{ClientWrapper, build_url};
 use tokio::sync::mpsc::{Sender};
-use tokio::time::{Instant, Duration, interval_at};
+use tokio::time::{Duration, interval};
 use reqwest::{
     header::{HeaderMap, HeaderValue}
 };
@@ -28,10 +28,10 @@ fn build_headers() -> HeaderMap{
     headers.insert("Content-Type",header_val);
     return headers;
 }
-
+//TODO: create a message for when the tor process completes setup, then start polling instead of doing this wait time (prone to error)
 pub async fn poll_messages(client: ClientWrapper, settings: &Settings, send_ln:Sender<ChannelMessage>, pickle:PickleJar) -> Result<(), reqwest::Error>{
-    let start = Instant::now() + Duration::from_secs(20);
-    let mut interval = interval_at(start, Duration::from_secs(20));
+
+    let mut interval = interval(Duration::from_secs(20));
     loop {
         interval.tick().await;
         get_message(&client, settings, send_ln.clone(),
@@ -66,17 +66,17 @@ async fn get_message(client: &ClientWrapper, settings: &Settings, send_ln:Sender
     else{
         command_url = "/getUpdates?allowed_updates=[\"message\",\"callback_query\"]".to_string();
     }
-    info!("command_url: {}",command_url);
+    info!("(get_message) command_url: {}",command_url);
     let res = client.client
         .get(build_url(base_url, &command_url))
         .headers(build_headers())
         .send()
         .await?;
 
-    info!("Status: {}", res.status());
+    info!("(get_message) status: {}", res.status());
 
     let last_messages = res.json::<Response>().await.unwrap();
-    info!("Response: {:#?}", last_messages);
+    info!("(get_message) last_messages: {:#?}", last_messages);
 
     let mut update_ids = vec![];
 
@@ -107,7 +107,7 @@ async fn get_message(client: &ClientWrapper, settings: &Settings, send_ln:Sender
     }
 
     let last_message_time = update_ids[0];
-    println!("last message time: {}", last_message_time);
+    println!("(get_message) last_message_time: {}", last_message_time);
 
     if last_message_time > LAST_UPDATE.load(Ordering::SeqCst){
         set_update(last_message_time).unwrap();
@@ -135,6 +135,7 @@ async fn handle_message(client: ClientWrapper,
                 macaroon: address_mac.1.clone(),
                 is_watching: true,
             };
+
             pickle.set(&chat_id.to_string(), row)
                   .await;
         }
@@ -204,7 +205,7 @@ Channels:
             return ("bad".to_string(),r#"Please try one of the available options, your message was not understood:
 - /start - register node
 - /help - list of commands
-- /status - status of registered node
+- /status - status of registered nodef
 - /stop - deregister node sentinel and delete data"#.to_string());
 
         }
@@ -219,9 +220,9 @@ fn parse_address_token(message: &str) -> (String, String){
     if USER_INFO.is_match(message){
         let found_data = USER_INFO.captures(message).unwrap();
         let lightning_add = found_data.get(1).map_or("", |m| m.as_str());
-        info!("lightning_add: {}", lightning_add);
+        info!("(parse_address_token) lightning_add: {}", lightning_add);
         let macaroon = found_data.get(3).map_or("", |m| m.as_str());
-        info!("macaroon: {}", macaroon);
+        info!("(parse_address_token) macaroon: {}", macaroon);
         return (lightning_add.to_string(), macaroon.to_string());
     }
 
@@ -236,17 +237,13 @@ fn build_message(chat_id:i64, node_url:String, macaroon:String, ln_command:Strin
         chat_id:chat_id,
         node_url:node_url.clone(),
         macaroon:macaroon,
-        command: if node_url.len() > 0 { "status".to_string() } else { ln_command },
+        command: ln_command,
         message:"".to_string(),
     };
-
+    info!("(build_message) ln_info: {}", ln_info.clone());
     return ln_info;
 }
 
-
-pub fn build_full_base(settings: &Settings) -> String{
-    return settings.telegram_base_url.to_string()+&settings.telegram_bot_id.to_owned();
-}
 
 pub async fn send_message(client: ClientWrapper, settings: &Settings, message:SendMessage) ->  Result<(), reqwest::Error>{
     let base_url = build_full_base(settings);
@@ -260,12 +257,17 @@ pub async fn send_message(client: ClientWrapper, settings: &Settings, message:Se
         .send()
         .await?;
 
-    info!("Status: {}", res.status());
+    info!("(send_message) status: {}", res.status());
 
     let text = res.text().await?;
 
-    info!("Response: {}", text);
+    info!("(send_message) response: {}", text);
 
     Ok(())
 
+}
+
+
+pub fn build_full_base(settings: &Settings) -> String{
+    return settings.telegram_base_url.to_string()+&settings.telegram_bot_id.to_owned();
 }

@@ -1,6 +1,4 @@
-extern crate log;
-
-use log::{info,error, LevelFilter};
+use log::{info, LevelFilter};
 use env_logger::{Target};
 use anyhow::Result;
 use std::sync::{Arc};
@@ -16,18 +14,21 @@ use channels::{Messages, ChannelMessage, ChannelType};
 use clients::telegram_client;
 use clients::lightning_client;
 use config_wrapper::SETTINGS;
-use tor_proxy::tor_proxy::tor;
+use tor_proxy::{tor, watch, clear_old_tor_log};
 use pickle_jar::PickleJar;
 
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    
+    clear_old_tor_log();
     setup_logger();
 
     tokio::spawn(async move {
         tor(config_wrapper::SETTINGS.socks_port_local);
     });
+
+    watch()
+        .unwrap();
 
     let pickle = PickleJar::init();
     let local_access = PickleJar::new(Arc::clone(&pickle.db));
@@ -44,14 +45,14 @@ async fn main() -> Result<()> {
 
     //NOTE: Listens for messages to send to telegram based on LN listening thread's responses
     tokio::spawn(async move {
-        info!("recieve_tel setup");
+        info!("(main) recieve_tel setup");
         while let Some(tel_info) =  recieve_tel.recv().await {
-                info!("recieve_tel: {}", tel_info);
+                info!("(main) recieve_tel: {}", tel_info);
                 let send_message = objects::SendMessage{
                     chat_id: tel_info.chat_id,
                     text: tel_info.message
                 };
-                info!("send_message: {}", send_message);
+                info!("(main) send_message: {}", send_message);
                 telegram_client::send_message(telegram_client.clone(), &SETTINGS, send_message)
                                 .await
                                 .unwrap();
@@ -61,11 +62,10 @@ async fn main() -> Result<()> {
     //NOTE: Listens for requests to send to user's lightning nodes based on requests from telegram messages
     tokio::spawn(async move {
         while let Some(ln_info) = recieve_ln.recv().await {
-                info!("recieve_ln: {}", ln_info);
+                info!("(main) recieve_ln: {}", ln_info);
                 let lnd_client_cl = lnd_client.clone();
                 let picklejar_cp = PickleJar::new(Arc::clone(&pickle.db));
                 let send_tel_cl = send_tel.clone();
-
                 //NOTE: creates new thread to poll a user's ln node
                 tokio::spawn(async move {
                     lightning_client::check_hidden_service(&lnd_client_cl,
