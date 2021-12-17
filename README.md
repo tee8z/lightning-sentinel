@@ -27,3 +27,8 @@ How to get data needed to register with the bot:
 TODO:
 - Make sure threads are actually being turned off when user requests service to end
 - Would like to show if node is up or down & what channels are active when checking
+
+
+- NOTE: To run this on ubuntu 20.04, make sure you have the CC linker installed by running:
+- `sudo apt install build-essential`
+- `sudo apt-get install libssl-dev pkg-config autoconf`
