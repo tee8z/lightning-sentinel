@@ -127,7 +127,8 @@ async fn handle_message(client: ClientWrapper,
     let parse_cl = parse.clone();
 
     if address_mac.0.len() > 0 || parse.0 == "status" {
-        let ln_info = build_message(chat_id.clone(), address_mac.0.clone(), address_mac.1.clone(), parse.0.clone());
+        let command = if address_mac.0.len() > 0 { "start".to_string() } else { "status".to_string() };
+        let ln_info = build_message(chat_id.clone(), address_mac.0.clone(), address_mac.1.clone(), command);
         if address_mac.0.len() > 0 {
             let row = Row{
                 telegram_chat_id:chat_id.clone(), 
