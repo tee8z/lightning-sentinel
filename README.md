@@ -1,6 +1,6 @@
 # Lightning-sentinel
 ### Description:
-- A telegram bot written in rust that will monitor a lighting node over tor. It does this through calling the node's REST API and sending notifications to a telegram private channel with the node adminstator
+- A telegram bot written in rust that will monitor a lighting node over tor. It does this through calling the node's REST API and sending notifications to a telegram private channel with the node administrator
 
 ### Privacy information and reason for this bot:
 - The need to build this came after trying out the lightning-watch telegram bot and being frusted that in it's ideal state it requires the user to lock up funds in a channel with it. Maybe this was a lot of effort to get around that problem, but we shall see.
