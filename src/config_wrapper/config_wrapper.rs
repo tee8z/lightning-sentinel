@@ -31,8 +31,9 @@ impl Default for Settings {
 impl Settings{
     fn new() -> Self {
         let mut def_config = Config::default();
-        def_config.merge(File::with_name("Settings.toml")).unwrap()
+        def_config.merge(File::with_name("Settings")).unwrap()
                  .merge(Environment::with_prefix("APP")).unwrap();
+        
         let mut settings = Settings::default();
         settings.sock_url_local = def_config.get_str("SOCKS_URL_LOCAL").unwrap();
         settings.socks_port_local = def_config.get("SOCKS_PORT_LOCAL").unwrap();
