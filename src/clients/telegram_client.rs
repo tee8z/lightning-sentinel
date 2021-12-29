@@ -144,7 +144,7 @@ async fn handle_message(client: ClientWrapper,
 
         if let Err(_) = send_ln.send(ln_info)
             .await {
-            error!("receiver dropped");
+            error!("(handle_message): receiver dropped");
         }
     }
     else if parse_cl.0 == "help" || parse_cl.0 == "start" || parse_cl.0 == "bad" || parse.0.clone() == "stop" {

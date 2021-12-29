@@ -20,9 +20,7 @@ use std::{
 
 #[derive(Serialize, Deserialize)]
 struct UserInfoLn {
-    pub commit_hash: String, 
-    pub identity_pubkey: String, 
-    pub alias: String, 
+    pub tor_api_url: String, 
     pub num_pending_channels: i64, 
     pub num_active_channels: i64, 
     pub num_inactive_channels: i64, 
@@ -32,14 +30,12 @@ struct UserInfoLn {
 impl fmt::Display for UserInfoLn {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         return write!(f, r#"(
-            'commit_hash': '{}',
-            'identity_pubkey': '{}',
-            'alias': '{}',
+            'tor_api_url': '{}',
             'num_pending_channels': '{}',
             'num_active_channels': '{}'
             'num_inactive_channels': '{}'
             'num_peers': '{}'
-        )"#, self.commit_hash, self.identity_pubkey, self.alias, self.num_pending_channels, self.num_active_channels, self.num_inactive_channels, self.num_peers);
+        )"#,self.tor_api_url, self.num_pending_channels, self.num_active_channels, self.num_inactive_channels, self.num_peers);
     }
 }
 
@@ -54,7 +50,7 @@ pub async fn check_hidden_service(client: &ClientWrapper, ln_info: ChannelMessag
 
     let resolved_data = handle_check_service(ln_info.clone(),  PickleJar::new(Arc::clone(&pickle.db))).await;
     let mut interval = interval(Duration::from_secs(20));
-    info!("{}", ln_info.command.clone());
+    info!("(check_hidden_service): ln_info.command {}", ln_info.command.clone());
     let mut send_status = if ln_info.command.len() == 0  { false } else { true };
     loop {
         let pickle_get = PickleJar::new(Arc::clone(&pickle.db));
@@ -79,12 +75,12 @@ pub async fn check_hidden_service(client: &ClientWrapper, ln_info: ChannelMessag
         match get_command_node(&client, ln_info.clone(), url.to_string(), macaroon.to_string(), send_tel.clone(), command.to_string(), send_status)
             .await {
                 Ok(_) => { 
-                    info!("OK"); 
+                    info!("(check_hidden_service): get_command_node OK"); 
                 }
-                Err(e) => { error!("{}", e); }
+                Err(e) => { error!("(check_hidden_service): {}", e); }
             }
         send_status = false;
-        info!("Command: {}",ln_info.command);
+        info!("(check_hidden_service) Command: {}",ln_info.command);
         if ln_info.command == "status" {
             break;
         }
@@ -118,7 +114,7 @@ pub async fn handle_check_service(ln_info: ChannelMessage, pickle: PickleJar) ->
 //TODO: Clean response from node to be clear/simple to end user
 pub async fn get_command_node(client: &ClientWrapper, ln_info: ChannelMessage, check_url:String, macaroon:String, send_tel:Sender<ChannelMessage>, command:String, send_status:bool)-> Result<(), reqwest::Error> {
     
-    let url = build_url(check_url, &command);
+    let url = build_url(check_url.clone(), &command);
     let headers = build_headers(&macaroon);
     let res = client
                 .client
@@ -135,12 +131,12 @@ pub async fn get_command_node(client: &ClientWrapper, ln_info: ChannelMessage, c
                 return Ok(())
             }
             
-            handle_success_request(res,ln_info, &command, send_tel.clone())
+            handle_success_request(check_url.clone(), res,ln_info, &command, send_tel.clone())
                     .await
                     .unwrap();
             
         },
-        _ => { handle_request_err(res,ln_info, &command, send_tel.clone())
+        _ => { handle_request_err(check_url.clone(), res,ln_info, &command, send_tel.clone())
                         .await
                         .unwrap();
         }
@@ -158,24 +154,37 @@ fn build_headers(macaroon: &str) -> HeaderMap {
 }
 
 
-async fn handle_success_request(res: reqwest::Response, ln_info:ChannelMessage, command:&str, send_tel:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
-    let text = res.text().await?;
-    let ln_response: LnGetInfo = serde_json::from_str(&text)
-                                            .unwrap();
-    let to_send = UserInfoLn {
-        commit_hash: ln_response.commit_hash, 
-        identity_pubkey: ln_response.identity_pubkey, 
-        alias: ln_response.alias, 
-        num_pending_channels: ln_response.num_pending_channels, 
-        num_active_channels: ln_response.num_active_channels, 
-        num_inactive_channels: ln_response.num_inactive_channels,
-        num_peers: ln_response.num_peers
+async fn handle_success_request(tor_api_url: String, res: reqwest::Response, ln_info:ChannelMessage, command:&str, send_tel:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
+   let message_text;
+    match res.text().await {
+        Ok(text) => {
+            message_text = text;
+        }
+        Err(error) => {
+            message_text = error.to_string();
+        }
     };
+    let to_send;
+
+    match serde_json::from_str::<LnGetInfo>(&message_text) {
+        Ok(ln_response) => {
+            to_send = UserInfoLn {
+                tor_api_url: tor_api_url,
+                num_pending_channels: ln_response.num_pending_channels, 
+                num_active_channels: ln_response.num_active_channels, 
+                num_inactive_channels: ln_response.num_inactive_channels,
+                num_peers: ln_response.num_peers
+            }.to_string();
+        }
+        Err(error) => { 
+            to_send = format!("tor_api_url: {}\nerror: {}", tor_api_url, error.to_string());
+        }
+    }
 
     let tel_message = ChannelMessage {
         channel_type: ChannelType::TEL,
         command:command.to_string(),
-        message:to_send.to_string(),
+        message: to_send,
         node_url: "".to_string(),
         chat_id:ln_info.chat_id,
         macaroon:"".to_string()
@@ -189,17 +198,26 @@ async fn handle_success_request(res: reqwest::Response, ln_info:ChannelMessage, 
 }
 
 
-async fn handle_request_err(res: reqwest::Response, ln_info:ChannelMessage, command:&str, send_tel:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
-    let text = res.text().await?;
+async fn handle_request_err(tor_api_url: String, res: reqwest::Response, ln_info:ChannelMessage, command:&str, send_tel:Sender<ChannelMessage>) -> Result<(), reqwest::Error>{
+    let message_text;
+    match res.text().await {
+        Ok(text) => {
+            message_text = format!("tor_api_url: {}\nerror: {}", tor_api_url, text);
+        }
+        Err(error) => {
+            message_text = format!("tor_api_url: {}\nerror: {}", tor_api_url, error.to_string());
+        }
+    };
+    
     let tel_message = ChannelMessage {
         channel_type: ChannelType::TEL,
         command:command.to_string(),
-        message: text,
+        message: message_text,
         node_url: "".to_string(),
         chat_id:ln_info.chat_id,
         macaroon:"".to_string()
     };
-    info!("handle_request_err");
+
     info!("(handle_request_err) tel_message: {}", tel_message);
     if let Err(e) = send_tel.send(tel_message).await {
         error!("(handle_request_err) channel send error {0}", e);

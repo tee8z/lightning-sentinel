@@ -58,3 +58,7 @@
 - Proceed to register with the bot the same way as if you were using the existing bot
 
  ***NOTE: DO NOT HAVE THIS RUNNING ON THE SAME POWER SOURCE AS WHERE YOUR NODE IS RUNNING (WOULD DEFEATE THE PURPOSE OF THE BOT) ***
+
+
+TODO: 
+- make sure can work with c-lightning and raw LND & a rest api running
