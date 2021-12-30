@@ -32,10 +32,10 @@
     - https://medium.com/shibinco/create-a-telegram-bot-using-botfather-and-get-the-api-token-900ba00e0f39
 
 ### How to run:
-- To run this on ubuntu 20.04, make sure you have the CC linker installed by running:
-    - `sudo apt install build-essential`
-    - `sudo apt-get install libssl-dev pkg-config autoconf`
-- Create a Settings.toml file from the Settings.default.toml at the root of the machine
+- Build the binary from source using the Dockerfile or download the binary from the github release
+- Copy the built binary to where you would like to run the service
+- Don't forget to make the binary excutable with: `chmod +x lightning-sentinel`
+- Create a Settings.toml file from the Settings.default.toml at the root of the directory the service will run in
 - Add your telegram bot ID recieved from botfather 
 - Then set the binary up as a service using the following configuration in a file name lightning-sentinel.service:
  `
@@ -59,6 +59,6 @@
 
  ***NOTE: DO NOT HAVE THIS RUNNING ON THE SAME POWER SOURCE AS WHERE YOUR NODE IS RUNNING (WOULD DEFEATE THE PURPOSE OF THE BOT) ***
 
-
+`docker run --rm -t -d --name temp-container-2 lightning-sentinel`
 TODO: 
 - make sure can work with c-lightning and raw LND & a rest api running
