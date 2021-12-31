@@ -23,7 +23,12 @@
 - Respond to the Bot's `\start` command with the tuple `(<lightning_node_tor_address>,<macaroon>)`, 
     ex:
         `(https://wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion:8080, XXXXXXXXXXX...)`
----------------------------------------------------------------------------------------------------------------------------  
+---------------------------------------------------------------------------------------------------------------------------
+
+# STOP HERE UNLESS YOU WANT TO ADMIN YOUR OWN BOT!!
+
+
+
 ## To Host Your Own Telegram Monitoring Bot:
 
 ### Requirements
@@ -32,33 +37,37 @@
     - https://medium.com/shibinco/create-a-telegram-bot-using-botfather-and-get-the-api-token-900ba00e0f39
 
 ### How to run:
-- Build the binary from source using the Dockerfile or download the binary from the github release
+- Build the binary from source using the Dockerfile or download the static binary from the github release
+- Download binary: `wget https://github.com/tee8z/lightning-sentinel/releases/download/initial-release/lightning-sentinel`
 - Copy the built binary to where you would like to run the service
 - Don't forget to make the binary excutable with: `chmod +x lightning-sentinel`
-- Create a Settings.toml file from the Settings.default.toml at the root of the directory the service will run in
+- Create a Settings.toml file from the Settings.default.toml in the directory it will be running in
 - Add your telegram bot ID recieved from botfather 
-- Then set the binary up as a service using the following configuration in a file name lightning-sentinel.service:
+- Then, go to `/etc/systemd/system` and create the following file, name `lightning-sentinel.service`:
+- NOTE: If you'd like to run this under a different user than root, make sure to update the paths for WorkingDirectory & ExecStart
  `
-        [Unit]
-        Description=Telegram Bot monitoring lightning nodes
-        After=network.target
-        StartLimitIntervalSec=0
+ [Unit]
+   Description=Telegram Bot monitoring lightning nodes
+   After=network.target
+   StartLimitIntervalSec=0
 
-        [Service]
-        Type=simple
-        Restart=always
-        RestartSec=1
-        User=root
-        ExecStart=/root/lightning-sentinel/target/debug/lightning-sentinel
+ [Service]
+   Type=simple
+   Restart=always
+   RestartSec=1
+   User=root
+   WorkingDirectory=~
+   ExecStart=/root/lightning-sentinel
 
-        [Install]
-        WantedBy=multi-user.target
+  [Install]
+    WantedBy=multi-user.target
 `
-- Place this in `/etc/systemd/system`, then run `systemctl start lightning-sentinel`
+- save the file, then run `systemctl start lightning-sentinel`
+- Check the status with `systemctl status lightning-sentinel`, should be a green dot next to it now
 - Proceed to register with the bot the same way as if you were using the existing bot
 
  ***NOTE: DO NOT HAVE THIS RUNNING ON THE SAME POWER SOURCE AS WHERE YOUR NODE IS RUNNING (WOULD DEFEATE THE PURPOSE OF THE BOT) ***
-
+- How to set up lnconnect over tor, and host your rest API over it:
 - https://github.com/openoms/bitcoin-tutorials/blob/master/Zap_to_RaspiBlitz_through_Tor.md
 
 TODO: 
