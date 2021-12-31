@@ -5,7 +5,7 @@ use libtor::{
 use log::{error, info};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use regex::Regex;
-use std::fs::{OpenOptions, File};
+use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead};
 use std::path::Path;
 
@@ -13,17 +13,12 @@ fn build_path_to_tor_log() -> String {
     let root = config_dir().unwrap();
     let the_way = root.to_str().unwrap();
     let true_way = the_way.to_owned();
-    let the_path = true_way + "/tor.log";
-    return the_path;
+    true_way + "/tor.log"
 }
 
-pub fn clear_old_tor_log(){
+pub fn clear_old_tor_log() {
     let path = build_path_to_tor_log();
-    let _ = OpenOptions::new()
-                            .write(true)
-                            .truncate(true)
-                            .open(path);
-
+    let _ = OpenOptions::new().write(true).truncate(true).open(path);
 }
 
 //blocking
@@ -67,18 +62,13 @@ fn parse_keystring() -> bool {
     // File hosts must exist in current path before this produces output
     if let Ok(lines) = read_lines(build_path_to_tor_log()) {
         // Consumes the iterator, returns an (Optional) String
-        for line in lines {
-            if let Ok(log) = line {
-                match re.captures(log.as_str()) {
-                    Some(_) => {
+        for line in lines.flatten() {
+                if re.captures(line.as_str()).is_some() {
                         return true;
-                    }
-                    None => {}
                 }
-            }
         }
     }
-    return false;
+    false
 }
 
 pub fn watch() -> notify::Result<()> {
@@ -89,18 +79,15 @@ pub fn watch() -> notify::Result<()> {
     //NOTE: wait for log file to be created
     watcher.watch(file_path.parent().unwrap(), RecursiveMode::NonRecursive)?;
     if !file_path.exists() {
-        loop {
-            match initialrx.recv() {
+        match initialrx.recv() {
                 Ok(_) => {
                     info!("(watch) found file");
-                    break;
                 }
                 Err(e) => {
                     println!("(watch) error: {:?}", e);
-                    break;
                 }
-            }
         }
+
         watcher.unwatch(file_path.parent().unwrap())?;
     }
     info!("(watch) starting reading tor's logs, waiting for 100% bootstrapped");
@@ -111,9 +98,12 @@ pub fn watch() -> notify::Result<()> {
     watcher.watch(file_path, RecursiveMode::NonRecursive)?;
     for res in rx {
         match res {
-            Ok(_) => if parse_keystring() { 
-                info!("(watch) tor has reach 100% bootstrap, starting clients");
-                break; },
+            Ok(_) => {
+                if parse_keystring() {
+                    info!("(watch) tor has reach 100% bootstrap, starting clients");
+                    break;
+                }
+            }
             Err(e) => println!("(watch) error: {:?}", e),
         }
     }

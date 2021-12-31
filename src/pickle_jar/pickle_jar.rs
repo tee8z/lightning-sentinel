@@ -1,11 +1,11 @@
-use tokio::sync::Mutex;
-use std::sync::{Arc};
-use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
-use std::path::Path;
 use dirs::config_dir;
+use log::{error, info};
+use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use log::{info,error};
+use std::path::Path;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(tag = "row")]
@@ -17,30 +17,34 @@ pub struct Row {
 }
 
 impl Default for Row {
-    fn default () -> Row {
-        return Row {
-                telegram_chat_id:i64::MIN, 
-                node_url: "".to_string(),
-                is_watching: false,
-                macaroon: "".to_string()
-            };
+    fn default() -> Row {
+        Row {
+            telegram_chat_id: i64::MIN,
+            node_url: "".to_string(),
+            is_watching: false,
+            macaroon: "".to_string(),
+        }
     }
 }
 
 impl fmt::Display for Row {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        return write!(f, r#"(
+        return write!(
+            f,
+            r#"(
             'telegram_chat_id': '{}',
             'node_url': '{}',
             'is_watching': '{}',
             'macaroon': '{}'
-        )"#, self.telegram_chat_id, self.node_url, self.is_watching, self.macaroon);
+        )"#,
+            self.telegram_chat_id, self.node_url, self.is_watching, self.macaroon
+        );
     }
 }
 
 #[derive(Clone)]
 pub struct PickleJar {
-    pub db: Arc<Mutex<PickleDb>>
+    pub db: Arc<Mutex<PickleDb>>,
 }
 
 impl PickleJar {
@@ -59,84 +63,78 @@ impl PickleJar {
                 path,
                 PickleDbDumpPolicy::AutoDump,
                 SerializationMethod::Cbor,
-            ).unwrap();
+            )
+            .unwrap();
         }
-        Self { db: Arc::new(Mutex::new(pickle)) }
+        Self {
+            db: Arc::new(Mutex::new(pickle)),
+        }
     }
-    
+
     pub fn new(clone_db: Arc<Mutex<PickleDb>>) -> Self {
-        Self{ db: clone_db}
+        Self { db: clone_db }
     }
 
     pub async fn get(self, telegram_user_id: &i64) -> Row {
-        let guard = self.db.lock()
-                           .await;
-        let unlock_db = & *guard;
- 
+        let guard = self.db.lock().await;
+        let unlock_db = &*guard;
+
         match unlock_db.get::<Row>(&telegram_user_id.to_string()) {
             Some(value) => {
-               return value;
+                value
             }
             None => {
-                return Row::default();
+                Row::default()
             }
-         }
+        }
     }
-     
-    pub async fn set(self,telegram_client_id: &str, row: Row) {
-        let mut guard = self.db.lock()
-                               .await;
-    
+
+    pub async fn set(self, telegram_client_id: &str, row: Row) {
+        let mut guard = self.db.lock().await;
+
         let unlock_db = &mut *guard;
-        match unlock_db.set(&telegram_client_id, &row) {
-                Ok(_) => { }
-                Err(e) => {error!("(set) {}", e);}
+        match unlock_db.set(telegram_client_id, &row) {
+            Ok(_) => {}
+            Err(e) => {
+                error!("(set) {}", e);
             }
+        }
     }
 
     pub async fn remove(self, telegram_user_id: &i64) -> bool {
-        let mut guard = self.db.lock()
-                            .await;
-        
+        let mut guard = self.db.lock().await;
+
         let unlock_db = &mut *guard;
 
         match unlock_db.rem(&telegram_user_id.to_string()) {
             Ok(v) => {
-                if v {
-                    return true;
-                } else {
-                    return false;
-                }
+                return v;
             }
             Err(e) => {
                 error!("(remove) error: {}", e);
-                return false;
             }
         };
+        false
     }
 
     pub async fn get_values(self) -> Vec<Row> {
-        let guard = self.db.lock()
-                        .await;
-        let unlock_db = & *guard;
-        let mut values_vec:Vec<Row> = vec![];
+        let guard = self.db.lock().await;
+        let unlock_db = &*guard;
+        let mut values_vec: Vec<Row> = vec![];
 
-        for kv in unlock_db.iter(){
-            match kv.get_value() {
-                Some(value) => { values_vec.push(value); }
-                None => { }
-
-            } 
+        for kv in unlock_db.iter() {
+            if let Some(value) = kv.get_value() {
+                    values_vec.push(value);
+            }
         }
 
-        return values_vec;
+        values_vec
     }
 }
 
-fn build_path_to_pickle()-> String{
+fn build_path_to_pickle() -> String {
     let root = config_dir().unwrap();
     let the_way = root.to_str().unwrap();
     let true_way = the_way.to_owned();
-    let the_path = true_way + "/.pickleDb";
-    return the_path;
+    true_way + "/.pickleDb"
 }

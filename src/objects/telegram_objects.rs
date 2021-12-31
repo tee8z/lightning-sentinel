@@ -2,7 +2,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "status")]
 pub enum ChatMember {
@@ -248,12 +247,11 @@ pub struct Update {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub edited_channel_post: Option<Message>,
 
-   // #[serde(skip_serializing_if = "Option::is_none")]
-   //   pub inline_query: Option<InlineQuery>,
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    //   pub inline_query: Option<InlineQuery>,
 
-   // #[serde(skip_serializing_if = "Option::is_none")]
-   // pub chosen_inline_result: Option<ChosenInlineResult>,
-
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub chosen_inline_result: Option<ChosenInlineResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub callback_query: Option<CallbackQuery>,
 
@@ -395,14 +393,13 @@ pub struct Chat {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SendMessage {
     pub chat_id: i64,
-    pub text: String
+    pub text: String,
 }
 impl fmt::Display for SendMessage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         return write!(f, "{:?}", self);
     }
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Message {

@@ -45,24 +45,33 @@
 - Add your telegram bot ID recieved from botfather 
 - Then, go to `/etc/systemd/system` and create the following file, name `lightning-sentinel.service`:
 - NOTE: If you'd like to run this under a different user than root, make sure to update the paths for WorkingDirectory & ExecStart
- `
- [Unit]
-   Description=Telegram Bot monitoring lightning nodes
-   After=network.target
-   StartLimitIntervalSec=0
 
- [Service]
-   Type=simple
-   Restart=always
-   RestartSec=1
-   User=root
-   WorkingDirectory=~
-   ExecStart=/root/lightning-sentinel
 
-  [Install]
-    WantedBy=multi-user.target
-`
-- save the file, then run `systemctl start lightning-sentinel`
+```
+[Unit]
+  Description=Telegram Bot monitoring lightning nodes 
+  After=network.target 
+  StartLimitIntervalSec=0 
+
+[Service] 
+ Type=simple 
+ Restart=always 
+ RestartSec=1 
+ User=root 
+ WorkingDirectory=~ 
+ ExecStart=/root/lightning-sentinel 
+
+[Install]  
+  WantedBy=multi-user.target
+```
+
+- save the file, then run:
+```
+systemctl enable lightning-sentinel
+systemctl daemon-reload
+systemctl start lightning-sentinel
+
+```
 - Check the status with `systemctl status lightning-sentinel`, should be a green dot next to it now
 - Proceed to register with the bot the same way as if you were using the existing bot
 
