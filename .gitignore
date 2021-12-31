@@ -1,3 +1,5 @@
 /target
 Settings.toml
 .vscode/
+/release
+Cargo.lock

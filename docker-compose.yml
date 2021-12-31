@@ -1,0 +1,10 @@
+version: '3.9'
+services:
+  lightning-sentinel:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /lightning-sentinel
+    volumes:
+      - ./release:/lightning-sentinel/target/x86_64-unknown-linux-gnu/release:rw
+    command: sh -c "cargo build --target x86_64-unknown-linux-gnu --release && chmod +x /lightning-sentinel/target/x86_64-unknown-linux-gnu/release/lightning-sentinel"

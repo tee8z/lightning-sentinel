@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["tee8z <tee8z@protonmail.com>"]
 license-file = "LICENSE"
 description = "A telegram bot written in rust that will monitor a lighting node over tor. It does this through calling the node's REST API and sending notifications to a telegram private channel with the node administrator"
-repository = "https://github.com/tee8z/llightning-sentinel"
+repository = "https://github.com/tee8z/lightning-sentinel"
 keywords = ["telegram", "lightning", "monitoring", "bot"]
 categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
 
@@ -26,3 +26,4 @@ pickledb = "0.4.1"
 dirs = "4.0.0"
 regex = "1.5.4"
 notify = { version = "5.0.0-pre.13", features = ["serde"] }
+

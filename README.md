@@ -59,6 +59,7 @@
 
  ***NOTE: DO NOT HAVE THIS RUNNING ON THE SAME POWER SOURCE AS WHERE YOUR NODE IS RUNNING (WOULD DEFEATE THE PURPOSE OF THE BOT) ***
 
-`docker run --rm -t -d --name temp-container-2 lightning-sentinel`
+- https://github.com/openoms/bitcoin-tutorials/blob/master/Zap_to_RaspiBlitz_through_Tor.md
+
 TODO: 
 - make sure can work with c-lightning and raw LND & a rest api running
