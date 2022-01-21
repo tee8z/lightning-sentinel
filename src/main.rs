@@ -50,9 +50,15 @@ async fn main() -> Result<()> {
                 text: tel_info.message,
             };
             info!("(main) send_message: {}", send_message);
-            telegram_client::send_message(telegram_client.clone(), &SETTINGS, send_message)
-                .await
-                .unwrap();
+            match telegram_client::send_message(telegram_client.clone(), &SETTINGS, send_message)
+                .await {
+                    Ok(_) => {
+                    }
+                    Err(e) => {
+                        info!("(main) telegram_client::send_message error {:#?}", e);
+                    }
+                }
+                
         }
     });
 
@@ -93,7 +99,15 @@ async fn main() -> Result<()> {
                 macaroon: user.macaroon,
             };
 
-            send_lnd.clone().send(ln_info).await.unwrap();
+            match send_lnd.clone()
+            .send(ln_info)
+            .await {
+                Ok(_) => {
+                }
+                Err(e) => {
+                    info!("(main) channels.lightning_messages.send error {:#?}", e);
+                }
+            }
         }
     }
 

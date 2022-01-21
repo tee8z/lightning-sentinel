@@ -39,14 +39,17 @@ pub async fn poll_messages(
     let mut interval = interval(Duration::from_secs(20));
     loop {
         interval.tick().await;
-        get_message(
+        match get_message(
             &client,
             settings,
             send_ln.clone(),
             PickleJar::new(Arc::clone(&pickle.db)),
         )
-        .await
-        .unwrap();
+        .await {
+            Ok(_) => { info!("(poll_messages) get_message successfull")}
+            Err(e) => { info!("(poll_messages) get_message error {:#?}", e)}
+        }
+        
     }
 }
 #[derive(Serialize, Deserialize, Debug)]
@@ -81,16 +84,34 @@ async fn get_message(
         command_url = "/getUpdates?allowed_updates=[\"message\",\"callback_query\"]".to_string();
     }
     info!("(get_message) command_url: {}", command_url);
-    let res = client
+    let res;
+    
+    match client
         .client
         .get(build_url(base_url, &command_url))
         .headers(build_headers())
         .send()
-        .await?;
+        .await {
+            Ok(response) => {
+                res = response;
+            }
+            Err(e) => {
+                info!("(get_message) error {:#?}", e);
+                return Ok(())
+            }
+        }
 
     info!("(get_message) status: {}", res.status());
+    let last_messages;
 
-    let last_messages = res.json::<Response>().await.unwrap();
+    match res.json::<Response>().await {
+        Ok(last_message_reponse) => { last_messages = last_message_reponse}
+        Err(e) => {
+            info!("(get_message) error calling telegram bot: {:#?}", e);
+            return Ok(())
+        }
+    }
+
     info!("(get_message) last_messages: {:#?}", last_messages);
 
     let mut update_ids = vec![];
@@ -120,7 +141,13 @@ async fn get_message(
     println!("(get_message) last_message_time: {}", last_message_time);
 
     if last_message_time > LAST_UPDATE.load(Ordering::SeqCst) {
-        set_update(last_message_time).unwrap();
+        match set_update(last_message_time) {
+            Ok(_) => { info!("(get_message) set_update successful")}
+            Err(err) => {
+                info!("(get_message) set_update error {:#?}", err);
+                return Ok(())
+            }
+        }
     }
 
     Ok(())
@@ -179,7 +206,10 @@ async fn handle_message(
             chat_id,
             text: parse_cl.1,
         };
-        send_message(client, settings, message).await.unwrap();
+        match send_message(client, settings, message).await {
+            Ok(_) => {  }
+            Err(e) => { info!("(handle_message) Error in sending message {:#?}", e); }
+        }
     }
 }
 
@@ -258,7 +288,6 @@ fn build_message(
         message: "".to_string(),
     }
 }
-
 pub async fn send_message(
     client: ClientWrapper,
     settings: &Settings,

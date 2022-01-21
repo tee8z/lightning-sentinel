@@ -12,8 +12,12 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::{fmt, sync::Arc};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{
+    Mutex,
+    mpsc::Sender
+};
 use tokio::time::{interval, Duration};
+use lazy_static::lazy_static;
 
 #[derive(Serialize, Deserialize)]
 struct UserInfoLn {
@@ -42,6 +46,35 @@ impl fmt::Display for UserInfoLn {
             self.num_peers
         );
     }
+}
+lazy_static! {
+    pub static ref PASTMESSAGE: PastMessage = PastMessage::init();
+}
+
+
+#[derive(Clone)]
+pub struct PastMessage {
+    pub past_message: Arc<Mutex<String>>,
+}
+
+
+impl PastMessage {
+    pub fn init() -> Self {
+        Self {
+            past_message: Arc::new(Mutex::new("".to_string())),
+        }
+    }
+
+    pub async fn set(self, next_message:String) {
+        let mut guard = self.past_message.lock().await;
+       *guard = next_message;
+    }
+
+    pub async fn get(self)-> String {
+        let guard = self.past_message.lock().await;
+        guard.clone().to_string()
+    }
+
 }
 
 pub fn setup_client(settings: &Settings) -> ClientWrapper {
@@ -137,24 +170,51 @@ pub async fn get_command_node(
 ) -> Result<(), reqwest::Error> {
     let url = build_url(check_url.clone(), &command);
     let headers = build_headers(&macaroon);
-    let res = client.client.get(url).headers(headers).send().await?;
+    let res;
+    match client.client
+                .get(url)
+                .headers(headers)
+                .send()
+                .await {
+        Ok(response) => {
+            res = response;
+        }
+        Err(err) => {
+            info!("(get_command_node) error {:#?}", err);
+            return Ok(())
+        }
+    }
 
     info!("(get_command_node) Status: {}", res.status());
-
+    
     match res.status() {
         StatusCode::OK => {
             if !send_status {
                 return Ok(());
             }
 
-            handle_success_request(check_url.clone(), res, ln_info, &command, send_tel.clone())
-                .await
-                .unwrap();
+            match handle_success_request(check_url.clone(), res, ln_info, &command, send_tel.clone())
+                .await{
+                Ok(_) => {
+                    info!("(get_command_node) handle_success_request success");
+                }
+                Err(e) => {
+                    info!("(get_command_node) handle_success_request error {:#?}", e);
+                    return Ok(())
+                }
+            }
         }
         _ => {
-            handle_request_err(check_url.clone(), res, ln_info, &command, send_tel.clone())
-                .await
-                .unwrap();
+            match handle_request_err(check_url.clone(), res, ln_info, &command, send_tel.clone())
+                .await {
+                    Ok(_) => {
+                        info!("(get_command_node) handle_request_err success");
+                    }
+                    Err(e) => {
+                        info!("(get_command_node) handle_request_err error {:#?}", e);
+                        return Ok(())
+                    }
+                }
         }
     }
     Ok(())
@@ -162,10 +222,21 @@ pub async fn get_command_node(
 
 fn build_headers(macaroon: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
-    let header_val = HeaderValue::from_str(macaroon).unwrap();
-    headers.insert("Grpc-Metadata-macaroon", header_val);
     let header_val = HeaderValue::from_str("application/json").unwrap();
     headers.insert("Content-Type", header_val);
+
+    let header_val;
+    match HeaderValue::from_str(macaroon){
+        Ok(header) => {
+            header_val = header
+        }
+        Err(err) => {
+            info!("build_headers) error in creating string from macaroon {:#?}", err);
+            return headers;
+        }
+    }
+    headers.insert("Grpc-Metadata-macaroon", header_val);
+   
     headers
 }
 
@@ -239,11 +310,24 @@ async fn handle_request_err(
     let tel_message = ChannelMessage {
         channel_type: ChannelType::Tel,
         command: command.to_string(),
-        message: message_text,
+        message: message_text.clone(),
         node_url: "".to_string(),
         chat_id: ln_info.chat_id,
         macaroon: "".to_string(),
     };
+    
+    if PASTMESSAGE
+                  .clone()
+                  .get()
+                  .await == message_text
+                                    .clone() {
+        info!("Already sent this message to telegram chat {:#?}", message_text);
+        return Ok(())
+    }
+    
+    PASTMESSAGE.clone()
+               .set(message_text)
+               .await;
 
     info!("(handle_request_err) tel_message: {}", tel_message);
     if let Err(e) = send_tel.send(tel_message).await {

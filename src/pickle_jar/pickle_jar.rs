@@ -59,12 +59,23 @@ impl PickleJar {
                 SerializationMethod::Cbor,
             );
         } else {
-            pickle = PickleDb::load(
-                path,
+            match PickleDb::load(
+                path.clone(),
                 PickleDbDumpPolicy::AutoDump,
                 SerializationMethod::Cbor,
-            )
-            .unwrap();
+            ){
+                Ok(found_pickle) => {
+                    pickle = found_pickle
+                }
+                Err(err) => {
+                    info!("(init) Error in loading existing pickle, creating a new one {:#?}", err);
+                    pickle = PickleDb::new(
+                        path,
+                        PickleDbDumpPolicy::AutoDump,
+                        SerializationMethod::Cbor,
+                    );
+                }
+            }
         }
         Self {
             db: Arc::new(Mutex::new(pickle)),

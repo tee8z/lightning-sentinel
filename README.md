@@ -37,7 +37,8 @@
     - https://medium.com/shibinco/create-a-telegram-bot-using-botfather-and-get-the-api-token-900ba00e0f39
 
 ### How to run:
-- Build the binary from source using the Dockerfile or download the static binary from the github release
+- Build the binary from source using the Dockerfile or download the static binary from the github release: 
+    - `docker build .`
 - Download binary: `wget https://github.com/tee8z/lightning-sentinel/releases/download/initial-release/lightning-sentinel`
 - Copy the built binary to where you would like to run the service
 - Don't forget to make the binary excutable with: `chmod +x lightning-sentinel`
