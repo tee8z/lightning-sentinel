@@ -41,7 +41,7 @@
     - `docker build .`
 - Download binary: `wget https://github.com/tee8z/lightning-sentinel/releases/download/initial-release/lightning-sentinel`
 - Copy the built binary to where you would like to run the service
-- Don't forget to make the binary excutable with: `chmod +x lightning-sentinel`
+- Don't forget to make the binary excutable with: `sudo chmod +x lightning-sentinel`
 - Create a Settings.toml file from the Settings.default.toml in the directory it will be running in
 - Add your telegram bot ID recieved from botfather 
 - Then, go to `/etc/systemd/system` and create the following file, name `lightning-sentinel.service`:
