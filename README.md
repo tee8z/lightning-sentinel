@@ -38,7 +38,7 @@
 
 ### How to run:
 - Build the binary from source using the Dockerfile or download the static binary from the github release: 
-    - `docker build . & docker-compose lightning-sentinel`
+    - `docker build . & docker-compose run lightning-sentinel`
 - Download binary: `wget https://github.com/tee8z/lightning-sentinel/releases/download/initial-release/lightning-sentinel`
 - Copy the built binary to where you would like to run the service
 - Don't forget to make the binary excutable with: `sudo chmod +x lightning-sentinel`
