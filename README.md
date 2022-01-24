@@ -80,5 +80,10 @@ systemctl start lightning-sentinel
 - How to set up lnconnect over tor, and host your rest API over it:
 - https://github.com/openoms/bitcoin-tutorials/blob/master/Zap_to_RaspiBlitz_through_Tor.md
 
+
+#### If you found this tool useful and feel like buying me a coffee/beer please donate with the button below (tor link):
+[![](img/lightningPay.png)](https://qyalyxun6rwd6rguzjic2wycsumt4rv4q4sswyc2cbehnq6wokvivgad.onion/api/v1/invoices?storeId=9MoCExvosJ7hGKE4WQpb6xqAnZkSRrH5CQXUkPjqq9h&price=5&currency=USD)
+
 TODO: 
 - make sure can work with c-lightning and raw LND & a rest api running
+- add pubkey/signing schema to verify the source code here is what the bot you are talk with is 
