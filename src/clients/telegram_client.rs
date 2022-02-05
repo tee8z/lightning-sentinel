@@ -217,11 +217,11 @@ fn info_messages(action: String) -> (String, String) {
     match action.as_str() {
         "/start" => {
             ("start".to_string(),r#"Signup by sending:
-1) Tor address of your lighting node's REST api
+1) Address of your lighting node's REST api (can be tor or clearnet)
 2) Macaroon with the permissions to /getInfo endpoint
     
 Reply to this message with a tuple, ex:
-    (<lightning REST API tor address>,<macaroon>)
+    (https://<lightning REST API address>:<port>,<macaroon>)
  
 NOTE: Please look at this bot's README for details on obtaining these values, & other instructions on setup, if these values are new to you. The bot's README can be found here: https://github.com/tee8z/llightning-sentinel/blob/main/README.md"#.to_string())
         },
@@ -249,7 +249,7 @@ Channels:
             ("bad".to_string(),r#"Please try one of the available options, your message was not understood:
 - /start - register node
 - /help - list of commands
-- /status - status of registered nodef
+- /status - status of registered node
 - /stop - deregister node sentinel and delete data"#.to_string())
 
         }
@@ -258,7 +258,7 @@ Channels:
 
 fn parse_address_token(message: &str) -> (String, String) {
     lazy_static! {
-        static ref USER_INFO: Regex = Regex::new(r"(https://(\S+)onion:\d{4}),(\S{258})").unwrap();
+        static ref USER_INFO: Regex = Regex::new(r"(https://(\S+):(\d+)),(\S{258})").unwrap();
     }
 
     if USER_INFO.is_match(message) {

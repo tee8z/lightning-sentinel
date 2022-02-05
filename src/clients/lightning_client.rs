@@ -21,7 +21,7 @@ use lazy_static::lazy_static;
 
 #[derive(Serialize, Deserialize)]
 struct UserInfoLn {
-    pub tor_api_url: String,
+    pub api_url: String,
     pub num_pending_channels: i64,
     pub num_active_channels: i64,
     pub num_inactive_channels: i64,
@@ -33,13 +33,13 @@ impl fmt::Display for UserInfoLn {
         return write!(
             f,
             r#"(
-            'tor_api_url': '{}',
+            'api_url': '{}',
             'num_pending_channels': '{}',
             'num_active_channels': '{}'
             'num_inactive_channels': '{}'
             'num_peers': '{}'
         )"#,
-            self.tor_api_url,
+            self.api_url,
             self.num_pending_channels,
             self.num_active_channels,
             self.num_inactive_channels,
@@ -132,6 +132,8 @@ pub async fn check_hidden_service(
         }
         send_status = false;
         info!("(check_hidden_service) Command: {}", ln_info.command);
+
+        //Breaking here to keep from having multiple threads watching the same node
         if ln_info.command == "status" {
             break;
         }
@@ -241,7 +243,7 @@ fn build_headers(macaroon: &str) -> HeaderMap {
 }
 
 async fn handle_success_request(
-    tor_api_url: String,
+    api_url: String,
     res: reqwest::Response,
     ln_info: ChannelMessage,
     command: &str,
@@ -261,7 +263,7 @@ async fn handle_success_request(
     match serde_json::from_str::<LnGetInfo>(&message_text) {
         Ok(ln_response) => {
             to_send = UserInfoLn {
-                tor_api_url,
+                api_url,
                 num_pending_channels: ln_response.num_pending_channels,
                 num_active_channels: ln_response.num_active_channels,
                 num_inactive_channels: ln_response.num_inactive_channels,
@@ -270,7 +272,7 @@ async fn handle_success_request(
             .to_string();
         }
         Err(error) => {
-            to_send = format!("tor_api_url: {}\nerror: {}", tor_api_url, error.to_string());
+            to_send = format!("api_url: {}\nerror: {}", api_url, error.to_string());
         }
     }
 
@@ -291,7 +293,7 @@ async fn handle_success_request(
 }
 
 async fn handle_request_err(
-    tor_api_url: String,
+    api_url: String,
     res: reqwest::Response,
     ln_info: ChannelMessage,
     command: &str,
@@ -300,10 +302,10 @@ async fn handle_request_err(
     let message_text;
     match res.text().await {
         Ok(text) => {
-            message_text = format!("tor_api_url: {}\nerror: {}", tor_api_url, text);
+            message_text = format!("api_url: {}\nerror: {}", api_url, text);
         }
         Err(error) => {
-            message_text = format!("tor_api_url: {}\nerror: {}", tor_api_url, error.to_string());
+            message_text = format!("api_url: {}\nerror: {}", api_url, error.to_string());
         }
     };
 
@@ -316,11 +318,9 @@ async fn handle_request_err(
         macaroon: "".to_string(),
     };
     
-    if PASTMESSAGE
-                  .clone()
+    if PASTMESSAGE.clone()
                   .get()
-                  .await == message_text
-                                    .clone() {
+                  .await == message_text.clone() {
         info!("Already sent this message to telegram chat {:#?}", message_text);
         return Ok(())
     }
