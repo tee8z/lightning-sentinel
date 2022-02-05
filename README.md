@@ -91,8 +91,10 @@ systemctl start lightning-sentinel
 #### Please donate with the button below (tor link):
 [![](img/lightningPay.png)](https://qyalyxun6rwd6rguzjic2wycsumt4rv4q4sswyc2cbehnq6wokvivgad.onion/api/v1/invoices?storeId=9MoCExvosJ7hGKE4WQpb6xqAnZkSRrH5CQXUkPjqq9h&price=5&currency=USD)
 
-#### You can also try this BOLT12 offer if you'd rather donate that way (copy to get raw offer string):
+#### You can also try this BOLT12 offer if you'd rather donate that way:
 ![lno1pggkgmmwv96xjmmwyp6x7gr5v4jns7s7yqgclqrrnrpferlklulrkr5ehhvctr2hzernxpz4t2y25h94ryk93uzq7868x02ht55gfweza53se2we06v0ldm7p57w8mjn4pwg8gapuq3f7pefc703upcqlq2d7lpl6jflprm30tmyqgvx775l6jncqgw0xes](img/Bolt12.png)
+</br>
+lno1pggkgmmwv96xjmmwyp6x7gr5v4jns7s7yqgclqrrnrpferlklulrkr5ehhvctr2hzernxpz4t2y25h94ryk93uzq7868x02ht55gfweza53se2we06v0ldm7p57w8mjn4pwg8gapuq3f7pefc703upcqlq2d7lpl6jflprm30tmyqgvx775l6jncqgw0xes
 </br>
 
 ### TODO:
