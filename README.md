@@ -22,11 +22,11 @@
 - Create a private chat with the telegram bot @t.me/llightning_sentinel and send `\help`
 - Create macaroon on your lightning node command line with access to "/v1/getinfo":
    ` lncli bakemacaroon uri:/lnrpc.Lightning/GetInfo `
-- Respond to the Bot's `\start` command with the tuple `(<lightning_node_address>,<macaroon>)`, 
+- Respond to the Bot's `\start` command with the tuple `<lightning_node_address>, <macaroon>`, 
     ex:
-        `(https://wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion:443, XXXXXXXXXXX...)`
-        `(https://wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion:8080, XXXXXXXXXXX...)`
-        `(https://192.34.21.1:4801, XXXXXXXXXXX...)`
+        `https://wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion:443, XXXXXXXXXXX...`
+        `https://wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion:8080, XXXXXXXXXXX...`
+        `https://192.34.21.1:4801, XXXXXXXXXXX...`
 ---------------------------------------------------------------------------------------------------------------------------
 
 # STOP HERE UNLESS YOU WANT TO ADMIN YOUR OWN BOT!!

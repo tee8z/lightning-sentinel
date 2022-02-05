@@ -221,7 +221,7 @@ fn info_messages(action: String) -> (String, String) {
 2) Macaroon with the permissions to /getInfo endpoint
     
 Reply to this message with a tuple, ex:
-    (https://<lightning REST API address>:<port>,<macaroon>)
+    https://<lightning REST API address>:<port>, <macaroon>
  
 NOTE: Please look at this bot's README for details on obtaining these values, & other instructions on setup, if these values are new to you. The bot's README can be found here: https://github.com/tee8z/llightning-sentinel/blob/main/README.md"#.to_string())
         },
@@ -258,16 +258,18 @@ Channels:
 //TODO: add a unit test around this function to test patterns of user input
 fn parse_address_token(message: &str) -> (String, String) {
     lazy_static! {
-        static ref USER_INFO: Regex = Regex::new(r"(https://(\S+):(\d+), (\S+))").unwrap();
+        static ref USER_INFO: Regex = Regex::new(r"https://(\S+):(\d+), (\S+)").unwrap();
     }
 
     if USER_INFO.is_match(message) {
         let found_data = USER_INFO.captures(message).unwrap();
         let lightning_add = found_data.get(1).map_or("", |m| m.as_str());
         info!("(parse_address_token) lightning_add: {}", lightning_add);
+        let port = found_data.get(2).map_or("", |m| m.as_str());
+        info!("(parse_address_token) port: {}", port);
         let macaroon = found_data.get(3).map_or("", |m| m.as_str());
         info!("(parse_address_token) macaroon: {}", macaroon);
-        return (lightning_add.to_string(), macaroon.to_string());
+        return (lightning_add.to_string()+":"+port, macaroon.to_string());
     }
 
     ("".to_string(), "".to_string())
