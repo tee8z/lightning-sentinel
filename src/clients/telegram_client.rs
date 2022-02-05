@@ -255,7 +255,7 @@ Channels:
         }
     }
 }
-
+//TODO: add a unit test around this function to test patterns of user input
 fn parse_address_token(message: &str) -> (String, String) {
     lazy_static! {
         static ref USER_INFO: Regex = Regex::new(r"(https://(\S+):(\d+), (\S+))").unwrap();
