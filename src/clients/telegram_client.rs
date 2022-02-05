@@ -258,7 +258,7 @@ Channels:
 
 fn parse_address_token(message: &str) -> (String, String) {
     lazy_static! {
-        static ref USER_INFO: Regex = Regex::new(r"(https://(\S+):(\d+)),(\S{258})").unwrap();
+        static ref USER_INFO: Regex = Regex::new(r"(https://(\S+):(\d+), (\S+))").unwrap();
     }
 
     if USER_INFO.is_match(message) {
