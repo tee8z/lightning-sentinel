@@ -1,8 +1,4 @@
 use config::{Config, Environment, File};
-use lazy_static::lazy_static;
-lazy_static! {
-    pub static ref SETTINGS: Settings = Settings::new();
-}
 
 pub struct Settings {
     pub sock_url_local: String,

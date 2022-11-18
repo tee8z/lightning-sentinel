@@ -1,130 +1,15 @@
-use anyhow::Result;
-use env_logger::Target;
-use log::{info, LevelFilter};
-use std::sync::Arc;
-
-mod channels;
-mod clients;
-mod config_wrapper;
-mod domain;
-mod pickle_jar;
-mod tor_proxy;
-
-use channels::{ChannelMessage, ChannelType, Messages};
-use clients::lightning_client;
-
-use config_wrapper::SETTINGS;
-use pickle_jar::PickleJar;
-use tor_proxy::{clear_old_tor_log, tor, watch};
+use lightning_sentinel::configuration::get_configuration;
+use lightning_sentinel::startup::Application;
+use lightning_sentinel::telemetry::{get_subscriber, init_subscriber};
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    clear_old_tor_log();
-    setup_logger();
+async fn main() -> std::io::Result<()> {
+    let subscriber = get_subscriber("zero_to_prod".into(), "info".into(), std::io::stdout);
+    init_subscriber(subscriber);
 
-    tokio::spawn(async move {
-        tor(config_wrapper::SETTINGS.socks_port_local);
-    });
-
-    watch().unwrap();
-
-    let pickle = PickleJar::init();
-    let local_access = PickleJar::new(Arc::clone(&pickle.db));
-
-    let channels = Messages::new();
-    let (send_lnd, mut recieve_ln) = channels.lightning_messages;
-    let (send_tel, mut recieve_tel) = channels.nostr_messages;
-
-  
-    let lnd_client = lightning_client::setup_client(&SETTINGS);
-
-
-    //NOTE: Listens for messages to send to telegram based on LN listening thread's responses
-   /* tokio::spawn(async move {
-        info!("(main) recieve_tel setup");
-        while let Some(tel_info) = recieve_tel.recv().await {
-            info!("(main) recieve_tel: {}", tel_info);
-            let send_message = models::SendMessage {
-                chat_id: tel_info.chat_id,
-                text: tel_info.message,
-            };
-            info!("(main) send_message: {}", send_message);
-            match telegram_client::send_message(telegram_client.clone(), &SETTINGS, send_message)
-                .await {
-                    Ok(_) => {
-                    }
-                    Err(e) => {
-                        info!("(main) telegram_client::send_message error {:#?}", e);
-                    }
-                }
-                
-        }
-    }); */
-
-    //NOTE: Listens for requests to send to user's lightning nodes based on requests from telegram messages
-    tokio::spawn(async move {
-        while let Some(ln_info) = recieve_ln.recv().await {
-            info!("(main) recieve_ln: {}", ln_info);
-            let lnd_client_cl = lnd_client.clone();
-            let picklejar_cp = PickleJar::new(Arc::clone(&pickle.db));
-            let send_tel_cl = send_tel.clone();
-            //NOTE: creates new thread to poll a user's ln node
-            tokio::spawn(async move {
-                lightning_client::check_hidden_service(
-                    &lnd_client_cl,
-                    ln_info,
-                    PickleJar::new(Arc::clone(&picklejar_cp.db)),
-                    send_tel_cl.clone(),
-                )
-                .await;
-            });
-        }
-    });
-    let poll_db = PickleJar::new(Arc::clone(&local_access.db));
-
-    let initial_user = local_access.get_values().await;
-
-    let send_lnd_cp = send_lnd.clone();
-
-    //NOTE: Sets up initial threads of already registered users
-    if !initial_user.is_empty() {
-        for user in initial_user {
-            let ln_info = ChannelMessage {
-                channel_type: ChannelType::Ln,
-                user_id: user.telegram_chat_id,
-                node_url: user.node_url,
-                command: "".to_string(),
-                message: "".to_string(),
-                macaroon: user.macaroon,
-            };
-
-            match send_lnd.clone()
-            .send(ln_info)
-            .await {
-                Ok(_) => {
-                }
-                Err(e) => {
-                    info!("(main) channels.lightning_messages.send error {:#?}", e);
-                }
-            }
-        }
-    }
-
-    //NOTE: Makes one task to poll the telegram bot for new messages
-   /* telegram_client::poll_messages(
-        telegram_client_clone,
-        &*SETTINGS,
-        send_lnd_cp.clone(),
-        PickleJar::new(Arc::clone(&poll_db.db)),
-    )
-    .await?;
-    */
+    let configuration = get_configuration().expect("Failed to read configuration.");
+    let application = Application::build(configuration).await?;
+    application.run_until_stopped().await?;
     Ok(())
 }
 
-fn setup_logger() {
-    let mut builder = env_logger::Builder::new();
-    builder.filter(None, LevelFilter::Info);
-    builder.target(Target::Stdout);
-    builder.init();
-}

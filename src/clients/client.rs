@@ -1,4 +1,4 @@
-use crate::config_wrapper::Settings;
+use crate::configuration::Settings;
 use log::info;
 
 #[derive(Debug, Clone)]

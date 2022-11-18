@@ -1,6 +1,6 @@
-use super::client_wrapper::{build_url, ClientWrapper};
+use super::client::{build_url, ClientWrapper};
 use crate::channels::{ChannelMessage, ChannelType};
-use crate::config_wrapper::Settings;
+use crate::configuration::Settings;
 use crate::domain::LnGetInfo;
 use crate::pickle_jar::{PickleJar, Row};
 use anyhow::Result;
@@ -101,11 +101,11 @@ pub async fn check_hidden_service(
     loop {
         let pickle_get = PickleJar::new(Arc::clone(&pickle.db));
         let pickle_remove = PickleJar::new(Arc::clone(&pickle.db));
-        let row = pickle_get.get(&ln_info.clone().chat_id).await;
+        let row = pickle_get.get(&ln_info.clone().user_id).await;
 
         //Stops watching this node
         if !row.is_watching {
-            pickle_remove.remove(&ln_info.clone().chat_id).await;
+            pickle_remove.remove(&ln_info.clone().user_id).await;
             break;
         }
 
@@ -142,18 +142,18 @@ pub async fn check_hidden_service(
 
 pub async fn handle_check_service(ln_info: ChannelMessage, pickle: PickleJar) -> (String, String) {
     let mut row = PickleJar::new(Arc::clone(&pickle.db))
-        .get(&ln_info.chat_id)
+        .get(&ln_info.user_id)
         .await;
 
     if row.node_url.is_empty() {
         row = Row {
-            telegram_chat_id: ln_info.chat_id,
+            telegram_chat_id: ln_info.user_id,
             node_url: ln_info.node_url.clone(),
             is_watching: true,
             macaroon: ln_info.macaroon.clone(),
         };
         PickleJar::new(Arc::clone(&pickle.db))
-            .set(&ln_info.chat_id.to_string(), row.clone())
+            .set(&ln_info.user_id.to_string(), row.clone())
             .await;
     }
 
@@ -281,7 +281,7 @@ async fn handle_success_request(
         command: command.to_string(),
         message: to_send,
         node_url: "".to_string(),
-        chat_id: ln_info.chat_id,
+        user_id: ln_info.user_id,
         macaroon: "".to_string(),
     };
 
@@ -314,7 +314,7 @@ async fn handle_request_err(
         command: command.to_string(),
         message: message_text.clone(),
         node_url: "".to_string(),
-        chat_id: ln_info.chat_id,
+        user_id: ln_info.user_id,
         macaroon: "".to_string(),
     };
     

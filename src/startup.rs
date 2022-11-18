@@ -1,4 +1,21 @@
+use anyhow::Result;
+use env_logger::Target;
+use log::{info, LevelFilter};
+use std::sync::Arc;
 
+mod channels;
+mod clients;
+mod configuration;
+mod domain;
+mod pickle_jar;
+mod tor;
+
+use channels::{ChannelMessage, ChannelType, Messages};
+use clients::lightning;
+
+use configuration::SETTINGS;
+use pickle_jar::PickleJar;
+use tor::{clear_old_tor_log, tor, watch};
 
 pub struct Application {
     port: u16,

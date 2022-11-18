@@ -25,40 +25,8 @@
         `https://wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion:443, XXXXXXXXXXX...`
         `https://wkdirllfgoofflfXXXXXXXXXXXXXXXXXXXXXXXXXXXXJJJJJJJJJJJJ.onion:8080, XXXXXXXXXXX...`
         `https://192.34.21.1:4801, XXXXXXXXXXX...`
----------------------------------------------------------------------------------------------------------------------------
-
-# STOP HERE UNLESS YOU WANT TO ADMIN YOUR OWN BOT!!
 
 
-```
-[Unit]
-  Description=Telegram Bot monitoring lightning nodes 
-  After=network.target 
-  StartLimitIntervalSec=0 
-
-[Service] 
- Type=simple 
- Restart=always 
- RestartSec=1 
- User=root 
- WorkingDirectory=~ 
- ExecStart=/root/lightning-sentinel 
-
-[Install]  
-  WantedBy=multi-user.target
-```
-
-- save the file, then run:
-```
-systemctl enable lightning-sentinel
-systemctl daemon-reload
-systemctl start lightning-sentinel
-
-```
-- Check the status with `systemctl status lightning-sentinel`, should be a green dot next to it now
-- Proceed to register with the bot the same way as if you were using the existing bot
 
  ***NOTE: DO NOT HAVE THIS RUNNING ON THE SAME POWER SOURCE AS WHERE YOUR NODE IS RUNNING (WOULD DEFEATE THE PURPOSE OF THE BOT) ***
-- How to set up lnconnect over tor, and host your rest API over it:
-- https://github.com/openoms/bitcoin-tutorials/blob/master/Zap_to_RaspiBlitz_through_Tor.md
 
