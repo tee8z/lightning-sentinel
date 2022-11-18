@@ -33,3 +33,18 @@ pub struct Feature {
     pub is_required: bool,
     pub is_known: bool,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChannelBalance {
+    pub local_balance: Amount,
+    pub remote_balance: Amount,
+    pub unsettled_local_balance: Amount,
+    pub unsettled_remote_balance: Amount,
+    pub pending_open_local_balance: Amount,
+    pub pending_open_remote_balance: Amount,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Amount {
+    pub sat: u64,
+    pub msat: u64
+}

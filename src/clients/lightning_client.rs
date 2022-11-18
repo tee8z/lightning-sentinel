@@ -1,7 +1,7 @@
 use super::client_wrapper::{build_url, ClientWrapper};
 use crate::channels::{ChannelMessage, ChannelType};
 use crate::config_wrapper::Settings;
-use crate::objects::LnGetInfo;
+use crate::domain::LnGetInfo;
 use crate::pickle_jar::{PickleJar, Row};
 use anyhow::Result;
 use log::{error, info};

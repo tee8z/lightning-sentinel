@@ -1,24 +1,34 @@
-use anyhow::Result;
-use env_logger::Target;
-use log::{info, LevelFilter};
-use std::sync::Arc;
 
-mod channels;
-mod clients;
-mod config_wrapper;
-mod domain;
-mod pickle_jar;
-mod tor_proxy;
 
-use channels::{ChannelMessage, ChannelType, Messages};
-use clients::lightning_client;
+pub struct Application {
+    port: u16,
+    server: Server,
+}
 
-use config_wrapper::SETTINGS;
-use pickle_jar::PickleJar;
-use tor_proxy::{clear_old_tor_log, tor, watch};
+pub struct ApplciationBaseUrl(pub string);
 
-#[tokio::main]
-async fn main() -> Result<()> {
+impl Application {
+    pub async fn build(configuration: Settings) -> Result<self, std::io::Error> {
+
+    }
+
+    pub async fn run_until_stopped(self) -> Result<(), std::io::Error> {
+        self.server.await;
+    }
+}
+
+
+fn setup_logger() {
+    let mut builder = env_logger::Builder::new();
+    builder.filter(None, LevelFilter::Info);
+    builder.target(Target::Stdout);
+    builder.init();
+}
+
+
+pub fn run(
+    pickle: PickleJar,
+){
     clear_old_tor_log();
     setup_logger();
 
@@ -28,8 +38,7 @@ async fn main() -> Result<()> {
 
     watch().unwrap();
 
-    let pickle = PickleJar::init();
-    let local_access = PickleJar::new(Arc::clone(&pickle.db));
+  
 
     let channels = Messages::new();
     let (send_lnd, mut recieve_ln) = channels.lightning_messages;
@@ -120,11 +129,4 @@ async fn main() -> Result<()> {
     .await?;
     */
     Ok(())
-}
-
-fn setup_logger() {
-    let mut builder = env_logger::Builder::new();
-    builder.filter(None, LevelFilter::Info);
-    builder.target(Target::Stdout);
-    builder.init();
 }
